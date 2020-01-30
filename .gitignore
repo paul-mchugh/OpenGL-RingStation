@@ -1,0 +1,5 @@
+
+#ignore objfiles
+*.o
+.*.swp
+gl155
