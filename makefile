@@ -1,8 +1,8 @@
 CXX=g++
-CXXFLAGS=-I.
-DEPS =
+CXXFLAGS=-I. -g
+DEPS = Util.h
 LINKS = -lGL -lGLEW -lglfw
-OBJ = glMain.o
+OBJ = glMain.o Util.o
 EXECNAME = gl155
 
 %.o: %.c $(DEPS)
