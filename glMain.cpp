@@ -23,6 +23,7 @@ enum class TriAction
 	CIRCULAR
 };
 TriAction state = TriAction::HORIZONTAL;
+bool colorIntr = false;
 double lastTime=0;
 double deltaPerSec=0.1;
 double hProgress=1.0;
@@ -35,7 +36,7 @@ int main()
 	if(!glfwInit()) exit(1);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	GLFWwindow* window = glfwCreateWindow(600, 600, "Example CSC155", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(600, 600, "CSC155", NULL, NULL);
 	glfwMakeContextCurrent(window);
 	if(glewInit() != GLEW_OK) exit(1);
 	glfwSwapInterval(1);
@@ -109,8 +110,10 @@ void display(GLFWwindow* window, double currentTime)
 
 	GLuint xOffHandle = glGetUniformLocation(renderingProgram, "xOff");
 	GLuint yOffHandle = glGetUniformLocation(renderingProgram, "yOff");
+	GLuint intrHandle = glGetUniformLocation(renderingProgram, "intr");
 	glProgramUniform1f(renderingProgram, xOffHandle, x);
 	glProgramUniform1f(renderingProgram, yOffHandle, y);
+	glProgramUniform1i(renderingProgram, intrHandle, colorIntr);
 
 	glDrawArrays(GL_TRIANGLES, 0,3);
 }
@@ -138,5 +141,10 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 	{
 		state = TriAction::CIRCULAR;
 		printf("Pressed key C: Circular triangle movement\n");
+	}
+	else if(key == GLFW_KEY_I && action== GLFW_PRESS)
+	{
+		colorIntr = !colorIntr;
+		printf("Pressed key I: %s color interpolation\n", (colorIntr ? "Enabled":"Disabled"));
 	}
 }

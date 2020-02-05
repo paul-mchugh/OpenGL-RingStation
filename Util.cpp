@@ -69,7 +69,12 @@ constexpr const char* Util::errCodeToString(GLenum err)
 
 std::pair<char**, GLsizei> Util::readShader(const char* path)
 {
-	GLsizei lineCnt=0, lineMax=0xf;
+	//check path for null
+	if(path==NULL)
+	{
+		return std::make_pair<char**,GLsizei>(NULL,0);
+	}
+	GLsizei lineCnt=0, lineMax=0x10;
 	std::string line;
 	std::ifstream fStr{path};
 	if(!fStr.is_open())	//if the file can't be opened then return {NULL,0}
@@ -84,7 +89,7 @@ std::pair<char**, GLsizei> Util::readShader(const char* path)
 		lines[lineCnt++]=strdup(line.c_str());
 		if(lineCnt==lineMax)
 		{
-			lineMax = lineCnt & 0xf;
+			lineMax += 0x10;
 			lines = (char**)realloc(lines,lineMax*sizeof(*lines));
 		}
 	}
