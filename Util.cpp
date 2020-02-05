@@ -189,3 +189,17 @@ GLuint Util::createShaderProgram(	const char* vp, const char* fp,
 	}
 
 }
+
+void Util::printGLInfo()
+{
+	const GLubyte* vendorStr	= glGetString(GL_VENDOR);
+	const GLubyte* rendererStr	= glGetString(GL_RENDERER);
+	const GLubyte* versionStr	= glGetString(GL_VERSION);
+	const GLubyte* GLSLVerStr	= glGetString(GL_SHADING_LANGUAGE_VERSION);
+
+	printf(	"Vendor:       %s\n"
+			"Renderer:     %s\n"
+			"Version:      %s\n"
+			"GLSL Version: %s\n",
+			vendorStr, rendererStr, versionStr, GLSLVerStr);
+}

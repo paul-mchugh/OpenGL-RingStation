@@ -19,6 +19,7 @@ public:
 	static GLuint createShaderProgram(	const char* vp, const char* fp,
 										const char* tCS=NULL, const char* tES=NULL,
 										const char* gp=NULL);
+	static void printGLInfo();
 };
 
 #endif

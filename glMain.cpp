@@ -62,6 +62,7 @@ void init(GLFWwindow* window)
 	glfwSetKeyCallback(window, key_callback);
 	glGenVertexArrays(numVAOs, vao);
 	glBindVertexArray(vao[0]);
+	Util::printGLInfo();
 }
 
 void display(GLFWwindow* window, double currentTime)
@@ -121,9 +122,9 @@ void display(GLFWwindow* window, double currentTime)
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	if((key == GLFW_KEY_Q||key == GLFW_KEY_W) &&
-		action == GLFW_RELEASE && mods == GLFW_MOD_CONTROL)
+		action == GLFW_PRESS && mods == GLFW_MOD_CONTROL)
 	{
-		printf("Pressed exit key. Bye Bye.\n");
+		printf("Pressed exit key: Bye Bye.\n");
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 	}
 
