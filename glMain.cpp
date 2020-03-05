@@ -3,44 +3,41 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include "Util.h"
+#include "Sphere.h"
 
 //globals
-#define numVAOs 1
+const GLsizei numVAOs=1;
+const GLsizei numVBOs=1;
 GLuint renderingProgram;
 GLuint vao[numVAOs];
+GLuint vbo[numVBOs];
 
 //forward declarations
 void init(GLFWwindow* window);
+std::vector<float> setupVertices();
 void display(GLFWwindow* window, double currentTime);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void scroll_callback(GLFWwindow* window, double xScrOff, double yScrOff);
+void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void printHelp(void);
 
-//triangle action
-enum class TriAction
-{
-	HORIZONTAL,
-	VERTICAL,
-	CIRCULAR
-};
-TriAction state = TriAction::HORIZONTAL;
-bool colorIntr = true;
-double lastTime=0;
-double zoomDelta=0.05;
-double zoom = 0.5;
-double deltaPerSec=0.1;
-double hProgress=1.0;
-double vProgress=0.0;
-double cProgress=0.0;
-double radius=0.75;
+float zoom=0.5;
+float zoomDelta=0.05;
+Model s;
+std::vector<float> sphereData;
+glm::vec3 cameraLOC(0,0,8);
+glm::vec3 cubeLOC(0,-2,0);
+glm::mat4 pMat, vMat, mMat, mvMat;
 
 int main()
 {
 	if(!glfwInit()) exit(1);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	GLFWwindow* window = glfwCreateWindow(600, 600, "CSC155", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(600, 600, "CSC155: HW2", NULL, NULL);
 	glfwMakeContextCurrent(window);
 	if(glewInit() != GLEW_OK) exit(1);
 	glfwSwapInterval(1);
@@ -65,10 +62,34 @@ void init(GLFWwindow* window)
 	if(!renderingProgram) std::cout << "Could not Load shader" << std::endl;
 	glfwSetKeyCallback(window, key_callback);
 	glfwSetScrollCallback(window, scroll_callback);
+	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
+	//sphere data
+	s = SphereGenerator::generateSphere();
+	sphereData=setupVertices();
+
 	glGenVertexArrays(numVAOs, vao);
 	glBindVertexArray(vao[0]);
+	glGenBuffers(numVBOs, vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+	glBufferData(GL_ARRAY_BUFFER,sphereData.size()*sizeof(float),&sphereData[0],GL_STATIC_DRAW);
+
 	Util::printGLInfo();
 	printHelp();
+}
+
+std::vector<float> setupVertices()
+{
+	std::vector<glm::vec3> sphereVertices = s.getVertices();
+	//preallocate the array and convert to float array
+	std::vector<float> result;
+	for(int ind : s.getIndices())
+	{
+		result.push_back(sphereVertices[ind].x);
+		result.push_back(sphereVertices[ind].y);
+		result.push_back(sphereVertices[ind].z);
+	}
+	return result;
 }
 
 void display(GLFWwindow* window, double currentTime)
@@ -78,54 +99,32 @@ void display(GLFWwindow* window, double currentTime)
 	glClear(GL_COLOR_BUFFER_BIT);
 	glUseProgram(renderingProgram);
 
+	//setup the vertex array
+	glBindVertexArray(vao[0]);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(0);
 
-	//update transition progress
-	double change = (currentTime-lastTime)*deltaPerSec;
-	lastTime=currentTime;
+	//build perspective matrix
+	int width, height;
+	glfwGetFramebufferSize(window, &width, &height);
+	float aspect = (float)width/(float)height;
+	pMat = glm::perspective(glm::degrees(60.0f), aspect, 0.1f, 1000.0f);
 
-	hProgress-=change;
-	vProgress-=change;
-	cProgress-=change;
-	switch(state)
-	{
-	case TriAction::HORIZONTAL:
-		hProgress+=2*change;
-		break;
-	case TriAction::VERTICAL:
-		vProgress+=2*change;
-		break;
-	case TriAction::CIRCULAR:
-		cProgress+=2*change;
-		break;
-	}
+	//build vMatrix, mMatrix, and mvMatrix
+	vMat = glm::translate(glm::mat4(1.0f), -cameraLOC);
+	mMat = glm::translate(glm::mat4(1.0f), cubeLOC);
+	mvMat = vMat * mMat;
 
-	hProgress=std::min<double>(1,std::max<double>(0,hProgress));
-	vProgress=std::min<double>(1,std::max<double>(0,vProgress));
-	cProgress=std::min<double>(1,std::max<double>(0,cProgress));
-	zoom=std::min<double>(1,std::max<double>(0,zoom));
+	//send the uniforms to the GPU
+	GLuint mvHandle = glGetUniformLocation(renderingProgram, "mv_matrix");
+	GLuint projHandle = glGetUniformLocation(renderingProgram, "proj_matrix");
+	glUniformMatrix4fv(mvHandle, 1, GL_FALSE, glm::value_ptr(mvMat));
+	glUniformMatrix4fv(projHandle, 1, GL_FALSE, glm::value_ptr(pMat));
 
-	//position the triangle based off the progress, etc.
-	double periodProgress = fmod(currentTime, 4);
-	double m = (periodProgress<1 ?
-				periodProgress :
-				(periodProgress<3 ?
-					2-periodProgress :
-					periodProgress-4));
-	m*=0.75;
-	double radians = (periodProgress/2)*M_PI;
-	double x = m*hProgress + cProgress*radius*cos(radians);
-	double y = m*vProgress + cProgress*radius*sin(radians);
-
-	GLuint xOffHandle = glGetUniformLocation(renderingProgram, "xOff");
-	GLuint yOffHandle = glGetUniformLocation(renderingProgram, "yOff");
-	GLuint intrHandle = glGetUniformLocation(renderingProgram, "intr");
-	GLuint zoomHandle = glGetUniformLocation(renderingProgram, "zoom");
-	glProgramUniform1f(renderingProgram, xOffHandle, x);
-	glProgramUniform1f(renderingProgram, yOffHandle, y);
-	glProgramUniform1i(renderingProgram, intrHandle, colorIntr);
-	glProgramUniform1f(renderingProgram, zoomHandle, zoom);
-
-	glDrawArrays(GL_TRIANGLES, 0,3);
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);
+	glDrawArrays(GL_TRIANGLES, 0, s.getNumIndices());
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -139,29 +138,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
 	if((key == GLFW_KEY_SLASH || key == GLFW_KEY_F1) && action == GLFW_PRESS)
 	{
-		//I know that I am skippiny the shift+/ part of the ? key, but I
+		//I know that I am skipping the shift+/ part of the ? key, but I
 		//want it to be easy to press the help key
 		printHelp();
-	}
-	else if(key == GLFW_KEY_H && action == GLFW_PRESS)
-	{
-		state = TriAction::HORIZONTAL;
-		printf("Pressed key H: Horizontal triangle movement\n");
-	}
-	else if(key == GLFW_KEY_V && action == GLFW_PRESS)
-	{
-		state = TriAction::VERTICAL;
-		printf("Pressed key V: Vertical triangle movement\n");
-	}
-	else if(key == GLFW_KEY_C && action == GLFW_PRESS)
-	{
-		state = TriAction::CIRCULAR;
-		printf("Pressed key C: Circular triangle movement\n");
-	}
-	else if(key == GLFW_KEY_I && action== GLFW_PRESS)
-	{
-		colorIntr = !colorIntr;
-		printf("Pressed key I: %s color interpolation\n", (colorIntr ? "Enabled":"Disabled"));
 	}
 	else if((key == GLFW_KEY_0 || key == GLFW_KEY_KP_0) && action == GLFW_PRESS)
 	{
@@ -186,16 +165,17 @@ void scroll_callback(GLFWwindow* window, double xScrOff, double yScrOff)
 	else if(yScrOff<0)	zoom -= zoomDelta;
 }
 
+void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+{
+	glViewport(0, 0, width, height);
+}
+
 void printHelp(void)
 {
 	printf(
 		"Usage:\n"
 		"Press any of the following keys while the window is selected\n"
 		" ?:  View this help message in console(F1 also works)\n"
-		" H:  Switch triangle to horizontal movement mode(default mode)\n"
-		" V:  Switch triangle to vertical movement mode\n"
-		" C:  Switch triangle to circular movement mode\n"
-		" I:  Toggle Color Interpolation(default on)\n"
 		" 0:  Reset Zoom\n"
 		" +:  Increase Zoom(or scroll)\n"
 		" -:  Decrease Zoom(or scroll)\n"
