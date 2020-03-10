@@ -3,22 +3,23 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <stack>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include "Util.h"
-#include "Sphere.h"
+#include "Generator.h"
+#include "World.h"
+#include "Camera.h"
 
 //globals
-const GLsizei numVAOs=1;
-const GLsizei numVBOs=1;
+const float rotateMagnitude = 30;
+const float moveMagnitude = 5;
 GLuint renderingProgram;
-GLuint vao[numVAOs];
-GLuint vbo[numVBOs];
 
 //forward declarations
 void init(GLFWwindow* window);
-std::vector<float> setupVertices();
 void display(GLFWwindow* window, double currentTime);
+void handleKeys(GLFWwindow* window, double time);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void scroll_callback(GLFWwindow* window, double xScrOff, double yScrOff);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -26,11 +27,11 @@ void printHelp(void);
 
 float zoom=0.5;
 float zoomDelta=0.05;
-Model s;
-std::vector<float> sphereData;
-glm::vec3 cameraLOC(0,0,8);
-glm::vec3 cubeLOC(0,-2,0);
-glm::mat4 pMat, vMat, mMat, mvMat;
+double lastTime=0;
+glm::vec3 cameraLOC(0,0,30);
+Camera c;
+glm::mat4 pMat, vMat;
+World wld;
 
 int main()
 {
@@ -64,78 +65,93 @@ void init(GLFWwindow* window)
 	glfwSetScrollCallback(window, scroll_callback);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-	//sphere data
-	s = SphereGenerator::generateSphere();
-	sphereData=setupVertices();
+	wld.init();
 
-	glGenVertexArrays(numVAOs, vao);
-	glBindVertexArray(vao[0]);
-	glGenBuffers(numVBOs, vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-	glBufferData(GL_ARRAY_BUFFER,sphereData.size()*sizeof(float),&sphereData[0],GL_STATIC_DRAW);
+	//setup camera
+	c.setPos(cameraLOC);
+
+	//model data
+	GLuint sunTexture = Util::loadTexture("img/sun_euv.png");
+	GLuint riwTexture = Util::loadTexture("img/rw_test.png");
+
+	Model s1 = Generator::generateSphere();
+	Model s2 = Generator::generateRingHab(0.3,0.1,0.1);
+	Model s3 = Generator::generateSphere();
+	Model s4 = Generator::generateSphere();
+	Orbiter* ob  = new Orbiter{&wld, s1, renderingProgram, sunTexture, 3,
+	                           20.0f, 0, glm::radians(60.0f), glm::radians(80.0f),
+	                           2.0f, glm::vec3{0.1f,1.0f,0.0f}, 15, 0.6f};
+	Orbiter* ob2 = new Orbiter{&wld, s2, renderingProgram, riwTexture, 1,
+	                           20.0f, 0, glm::radians(45.0f), glm::radians(270.0f),
+	                           5.0f, glm::vec3{0,1,0}, 5, 0.6f};
+	Orbiter* ob3 = new Orbiter{&wld, s3, renderingProgram, 0, 1,
+	                           5.0f, 0, glm::radians(20.0f), glm::radians(180.0f),
+	                           10.0f, glm::vec3{0.0f,1.0f,0.0f}, 30, 0.6f};
+	Orbiter* ob4 = new Orbiter{&wld, s4, renderingProgram, 0, 1,
+	                           5.0f, 0, glm::radians(90.0f), glm::radians(120.0f),
+	                           2.0f, glm::vec3{1.0f,1.0f,0.0f}, 40, 0.6f};
+	wld.setRoot(*ob);
+	ob->addChild(*ob2);
+	ob->addChild(*ob3);
+	ob3->addChild(*ob4);
 
 	Util::printGLInfo();
 	printHelp();
 }
 
-std::vector<float> setupVertices()
-{
-	std::vector<glm::vec3> sphereVertices = s.getVertices();
-	//preallocate the array and convert to float array
-	std::vector<float> result;
-	for(int ind : s.getIndices())
-	{
-		result.push_back(sphereVertices[ind].x);
-		result.push_back(sphereVertices[ind].y);
-		result.push_back(sphereVertices[ind].z);
-	}
-	return result;
-}
-
 void display(GLFWwindow* window, double currentTime)
 {
-	glClear(GL_DEPTH_BUFFER_BIT);
-	glClearColor(0.0,0.0,0.0,1.0);
-	glClear(GL_COLOR_BUFFER_BIT);
-	glUseProgram(renderingProgram);
-
-	//setup the vertex array
-	glBindVertexArray(vao[0]);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glEnableVertexAttribArray(0);
+	double timeDiff=currentTime-lastTime;
+	//handle keyboard input
+	handleKeys(window, timeDiff);
+	//update the orbiters
+	wld.update(timeDiff);
+	lastTime = currentTime;
 
 	//build perspective matrix
 	int width, height;
 	glfwGetFramebufferSize(window, &width, &height);
 	float aspect = (float)width/(float)height;
-	pMat = glm::perspective(glm::degrees(60.0f), aspect, 0.1f, 1000.0f);
-
-	//build vMatrix, mMatrix, and mvMatrix
-	vMat = glm::translate(glm::mat4(1.0f), -cameraLOC);
-	mMat = glm::translate(glm::mat4(1.0f), cubeLOC);
-	mvMat = vMat * mMat;
+	pMat = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 1000.0f);
+	vMat = c.getTransform();
 
 	//send the uniforms to the GPU
-	GLuint mvHandle = glGetUniformLocation(renderingProgram, "mv_matrix");
 	GLuint projHandle = glGetUniformLocation(renderingProgram, "proj_matrix");
-	glUniformMatrix4fv(mvHandle, 1, GL_FALSE, glm::value_ptr(mvMat));
 	glUniformMatrix4fv(projHandle, 1, GL_FALSE, glm::value_ptr(pMat));
 
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LEQUAL);
-	glDrawArrays(GL_TRIANGLES, 0, s.getNumIndices());
+	std::stack<glm::mat4> mst;
+	mst.push(glm::mat4(1.0f));
+	mst.push(mst.top()*vMat);
+	wld.draw(mst);
 }
+
+#define GK(key) (glfwGetKey(window,GLFW_KEY_ ## key ) == GLFW_PRESS)
+
+void handleKeys(GLFWwindow* window, double time)
+{
+	if(GK(W)) c.moveBy(glm::vec3{0,0, moveMagnitude*time});
+	if(GK(S)) c.moveBy(glm::vec3{0,0,-moveMagnitude*time});
+	if(GK(E)) c.moveBy(glm::vec3{0, moveMagnitude*time,0});
+	if(GK(Q)) c.moveBy(glm::vec3{0,-moveMagnitude*time,0});
+	if(GK(A)) c.moveBy(glm::vec3{ moveMagnitude*time,0,0});
+	if(GK(D)) c.moveBy(glm::vec3{-moveMagnitude*time,0,0});
+	if(GK(UP)    ) c.pitch(glm::radians( rotateMagnitude*time));
+	if(GK(DOWN)  ) c.pitch(glm::radians(-rotateMagnitude*time));
+	if(GK(LEFT)  ) c.pan  (glm::radians( rotateMagnitude*time));
+	if(GK(RIGHT) ) c.pan  (glm::radians(-rotateMagnitude*time));
+}
+
+#undef GK
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
+	//these keys are special and deserve a callback
 	if((key == GLFW_KEY_Q||key == GLFW_KEY_W) &&
 		action == GLFW_PRESS && mods == GLFW_MOD_CONTROL)
 	{
 		printf("Pressed exit key: Bye Bye.\n");
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 	}
-
 	if((key == GLFW_KEY_SLASH || key == GLFW_KEY_F1) && action == GLFW_PRESS)
 	{
 		//I know that I am skipping the shift+/ part of the ? key, but I
@@ -175,10 +191,17 @@ void printHelp(void)
 	printf(
 		"Usage:\n"
 		"Press any of the following keys while the window is selected\n"
-		" ?:  View this help message in console(F1 also works)\n"
-		" 0:  Reset Zoom\n"
-		" +:  Increase Zoom(or scroll)\n"
-		" -:  Decrease Zoom(or scroll)\n"
-		"^Q:  Quit program(^W also works)\n"
+		"  ?:  View this help message in console(F1 also works)\n"
+		"  0:  Reset Zoom\n"
+		"  +:  Increase Zoom(or scroll)\n"
+		"  -:  Decrease Zoom(or scroll)\n"
+		" ^Q:  Quit program(^W also works)\n"
+		" SP:  Use space bar to toggle axes\n"
+		"W/S:  Forward/Backward\n"
+		"A/D:  Strafe left/Strafe right\n"
+		"Q/E:  Up/Down\n"
+		" /\\:  Use up arrow key to pitch up\n"
+		"</>:  Use Left/Right arrow keys to pan Left/Right\n"
+		" \\/:  Use down arrow key to pitch down\n"
 	);
 }

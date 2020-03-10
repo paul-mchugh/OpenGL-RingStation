@@ -1,15 +1,15 @@
-CXX=g++
-CXXFLAGS=-I. -g
-DEPS = Util.h Sphere.h Model.h World.h
-LINKS = -lGL -lGLEW -lglfw
-OBJ = glMain.o Util.o Sphere.o Model.o World.o
+CXX = g++
+CXXFLAGS = -I. -g -I./include
+DEPS = Util.h Generator.h Model.h World.h Camera.h
+LINKS = -lGL -lGLEW -lglfw -lsoil2 -L./lib
+OBJ = glMain.o Util.o Generator.o Model.o World.o Camera.o
 EXECNAME = gl155
-
-%.o: %.c $(DEPS)
-	$(CXX) -c -o $@ $< $(CXXFLAGS)
 
 $(EXECNAME): $(OBJ)
 	$(CXX) -o $@ $^ $(CXXFLAGS) $(LINKS)
+
+%.o: %.cpp $(DEPS)
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 .PHONY: clean
 

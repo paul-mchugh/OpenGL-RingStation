@@ -1,5 +1,6 @@
 
 #include "Util.h"
+#include <SOIL2/SOIL2.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -188,6 +189,14 @@ GLuint Util::createShaderProgram(	const char* vp, const char* fp,
 		return 0;
 	}
 
+}
+
+GLuint Util::loadTexture(const char* filename)
+{
+	GLuint textureID =
+		SOIL_load_OGL_texture(filename, SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_INVERT_Y);
+	if(textureID == 0) printf("Could not find texture file '%s'\n", filename);
+	return textureID;
 }
 
 void Util::printGLInfo()

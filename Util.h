@@ -3,6 +3,7 @@
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 #include <utility>
 
 class Util
@@ -19,6 +20,7 @@ public:
 	static GLuint createShaderProgram(	const char* vp, const char* fp,
 										const char* tCS=NULL, const char* tES=NULL,
 										const char* gp=NULL);
+	static GLuint loadTexture(const char* filename);
 	static void printGLInfo();
 };
 

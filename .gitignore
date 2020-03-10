@@ -3,3 +3,7 @@
 *.o
 .*.swp
 gl155
+
+#ignore the lib/include folder
+lib/
+include/
