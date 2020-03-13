@@ -13,7 +13,7 @@
 
 //globals
 const float rotateMagnitude = 30;
-const float moveMagnitude = 5;
+const float moveMagnitude = 8;
 GLuint renderingProgram;
 
 //forward declarations
@@ -25,10 +25,9 @@ void scroll_callback(GLFWwindow* window, double xScrOff, double yScrOff);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void printHelp(void);
 
-float zoom=0.5;
-float zoomDelta=0.05;
+bool axesEnabled=false;
 double lastTime=0;
-glm::vec3 cameraLOC(0,0,30);
+glm::vec3 cameraLOC(0,0,50);
 Camera c;
 glm::mat4 pMat, vMat;
 World wld;
@@ -59,7 +58,7 @@ int main()
 
 void init(GLFWwindow* window)
 {
-	renderingProgram = Util::createShaderProgram("vertShader.glsl", "fragShader.glsl");
+	renderingProgram = Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl");
 	if(!renderingProgram) std::cout << "Could not Load shader" << std::endl;
 	glfwSetKeyCallback(window, key_callback);
 	glfwSetScrollCallback(window, scroll_callback);
@@ -71,29 +70,45 @@ void init(GLFWwindow* window)
 	c.setPos(cameraLOC);
 
 	//model data
-	GLuint sunTexture = Util::loadTexture("img/sun_euv.png");
-	GLuint riwTexture = Util::loadTexture("img/rw_test.png");
+	GLuint sunTexture     = Util::loadTexture("img/sun_euv.png");
+	GLuint marsTexture    = Util::loadTexture("img/mars.jpg");
+	GLuint europaTexture  = Util::loadTexture("img/europa.jpg");
+	GLuint ringWldTexture = Util::loadTexture("img/rw_test.png");
+	GLuint earthTexture   = Util::loadTexture("img/earth.jpg");
+	GLuint shuttleTexture = Util::loadTexture("img/spstob_1.jpg");
 
-	Model s1 = Generator::generateSphere();
-	Model s2 = Generator::generateRingHab(0.3,0.1,0.1);
-	Model s3 = Generator::generateSphere();
-	Model s4 = Generator::generateSphere();
-	Orbiter* ob  = new Orbiter{&wld, s1, renderingProgram, sunTexture, 3,
-	                           20.0f, 0, glm::radians(60.0f), glm::radians(80.0f),
-	                           2.0f, glm::vec3{0.1f,1.0f,0.0f}, 15, 0.6f};
-	Orbiter* ob2 = new Orbiter{&wld, s2, renderingProgram, riwTexture, 1,
-	                           20.0f, 0, glm::radians(45.0f), glm::radians(270.0f),
-	                           5.0f, glm::vec3{0,1,0}, 5, 0.6f};
-	Orbiter* ob3 = new Orbiter{&wld, s3, renderingProgram, 0, 1,
-	                           5.0f, 0, glm::radians(20.0f), glm::radians(180.0f),
-	                           10.0f, glm::vec3{0.0f,1.0f,0.0f}, 30, 0.6f};
-	Orbiter* ob4 = new Orbiter{&wld, s4, renderingProgram, 0, 1,
-	                           5.0f, 0, glm::radians(90.0f), glm::radians(120.0f),
-	                           2.0f, glm::vec3{1.0f,1.0f,0.0f}, 40, 0.6f};
-	wld.setRoot(*ob);
-	ob->addChild(*ob2);
-	ob->addChild(*ob3);
-	ob3->addChild(*ob4);
+	Model s    = Generator::generateSphere();
+	Model s1   = Generator::generateSphere();
+	Model s11  = Generator::generateSphere();
+	Model s111 = Generator::generateRingHab(0.3,0.1,0.1);
+	Model s2   = Generator::generateSphere();
+	Model s21  = ModelImporter::parseOBJ("models/shuttle.obj");
+
+	Orbiter* obs    = new Orbiter{&wld, s, renderingProgram, sunTexture, 5,
+	                              20, 0, glm::radians(60.0f), glm::radians(80.0f),
+	                              0, glm::vec3{0.1f,1.0f,0.0f}, 15, 0.6f};
+	Orbiter* obs1   = new Orbiter{&wld, s1, renderingProgram, marsTexture, 2,
+	                              20, 0, glm::radians(20.0f), glm::radians(280.0f),
+	                              15, glm::vec3{0,1,0}, 5, 0.6f};
+	Orbiter* obs11  = new Orbiter{&wld, s11, renderingProgram, europaTexture, 1,
+	                              25, 0, glm::radians(20.0f), glm::radians(15.0f),
+	                              6, glm::vec3{0,1,1}, 5, 0.6f};
+	Orbiter* obs111 = new Orbiter{&wld, s111, renderingProgram, ringWldTexture, 0.5,
+	                              5, 0, glm::radians(45.0f), glm::radians(270.0f),
+	                              2, glm::vec3{0,1,0}, 5, 0.6f};
+	Orbiter* obs2   = new Orbiter{&wld, s2, renderingProgram, earthTexture, 2,
+	                              25, 0, glm::radians(20.0f), glm::radians(180.0f),
+	                              20, glm::vec3{0,1,0}, 30, 0.6f};
+	Orbiter* obs21  = new Orbiter{&wld, s21, renderingProgram, shuttleTexture, 1,
+	                              10, 0, glm::radians(270.0f), glm::radians(90.0f),
+	                              3, glm::vec3{-1,0,0}, 10, 0.25};
+
+	wld.setRoot(*obs);
+	obs->addChild(*obs1);
+	obs1->addChild(*obs11);
+	obs11->addChild(*obs111);
+	obs->addChild(*obs2);
+	obs2->addChild(*obs21);
 
 	Util::printGLInfo();
 	printHelp();
@@ -115,7 +130,9 @@ void display(GLFWwindow* window, double currentTime)
 	pMat = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 1000.0f);
 	vMat = c.getTransform();
 
+
 	//send the uniforms to the GPU
+	glUseProgram(renderingProgram);
 	GLuint projHandle = glGetUniformLocation(renderingProgram, "proj_matrix");
 	glUniformMatrix4fv(projHandle, 1, GL_FALSE, glm::value_ptr(pMat));
 
@@ -123,6 +140,14 @@ void display(GLFWwindow* window, double currentTime)
 	mst.push(glm::mat4(1.0f));
 	mst.push(mst.top()*vMat);
 	wld.draw(mst);
+
+	if(axesEnabled)
+	{
+		//draw axes
+		LineDrawer::draw(pMat, vMat, glm::vec3(0,0,0), glm::vec3(9,0,0), glm::vec3(1,0,0));
+		LineDrawer::draw(pMat, vMat, glm::vec3(0,0,0), glm::vec3(0,9,0), glm::vec3(0,1,0));
+		LineDrawer::draw(pMat, vMat, glm::vec3(0,0,0), glm::vec3(0,0,9), glm::vec3(0,0,1));
+	}
 }
 
 #define GK(key) (glfwGetKey(window,GLFW_KEY_ ## key ) == GLFW_PRESS)
@@ -158,27 +183,22 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		//want it to be easy to press the help key
 		printHelp();
 	}
-	else if((key == GLFW_KEY_0 || key == GLFW_KEY_KP_0) && action == GLFW_PRESS)
+	else if(key == GLFW_KEY_R && action == GLFW_PRESS)
 	{
-		zoom = 0.5;
-		printf("Pressed key 0: Zoom reset\n");
+		c = Camera();
+		c.setPos(cameraLOC);
+		printf("Pressed key  R: Camera reset\n");
 	}
-	else if((key == GLFW_KEY_KP_ADD || key == GLFW_KEY_EQUAL) && action != GLFW_RELEASE)
+	else if(key == GLFW_KEY_SPACE && action == GLFW_PRESS)
 	{
-		zoom += zoomDelta;
-		printf("Pressed key +: Zoom %s\n", (zoom>1.025?"at max":"increased"));
-	}
-	else if((key == GLFW_KEY_MINUS || key == GLFW_KEY_KP_SUBTRACT) && action != GLFW_RELEASE)
-	{
-		zoom -= zoomDelta;
-		printf("Pressed key -: Zoom %s\n", (zoom<-0.025?"at min":"decreased"));
+		axesEnabled = !axesEnabled;
+		printf("Pressed key SP: Toggled World axes to %s\n", (axesEnabled?"on":"off"));
 	}
 }
 
 void scroll_callback(GLFWwindow* window, double xScrOff, double yScrOff)
 {
-	if(yScrOff>0)		zoom += zoomDelta;
-	else if(yScrOff<0)	zoom -= zoomDelta;
+	//do nothing for now
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -192,11 +212,9 @@ void printHelp(void)
 		"Usage:\n"
 		"Press any of the following keys while the window is selected\n"
 		"  ?:  View this help message in console(F1 also works)\n"
-		"  0:  Reset Zoom\n"
-		"  +:  Increase Zoom(or scroll)\n"
-		"  -:  Decrease Zoom(or scroll)\n"
+		"  R:  Reset camera to original position ((0,0,30), looking a the origin)\n"
 		" ^Q:  Quit program(^W also works)\n"
-		" SP:  Use space bar to toggle axes\n"
+		" SP:  Use space bar to toggle axes(default: off)\n"
 		"W/S:  Forward/Backward\n"
 		"A/D:  Strafe left/Strafe right\n"
 		"Q/E:  Up/Down\n"

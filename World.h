@@ -51,8 +51,8 @@ private:
 	std::size_t id;
 public:
 	Orbiter(World* w, Model m, GLuint shader, GLuint texture, double scale,
-	        double orbitPeriod, double revProgress, double incline, double intercept, double dist,
-	        glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress);
+	        double orbitPeriod, double revProgress, double incline, double intercept,
+	        double dist, glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress);
 	bool addChild(Orbiter& child);
 	void draw(std::stack<glm::mat4>& mstack);
 	void updatePos(double timePassed);

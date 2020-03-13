@@ -24,4 +24,14 @@ public:
 	static void printGLInfo();
 };
 
+class LineDrawer
+{
+private:
+	static GLuint vaoLn[1];
+	static GLuint shader;
+	static bool isInit;
+public:
+	static void draw(glm::mat4 p, glm::mat4 v, glm::vec3 src, glm::vec3 dst, glm::vec3 color);
+};
+
 #endif

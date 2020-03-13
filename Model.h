@@ -25,4 +25,10 @@ public:
     std::vector<glm::vec3> getTangents();
 };
 
+class ModelImporter
+{
+public:
+	static Model parseOBJ(const char* filePath);
+};
+
 #endif

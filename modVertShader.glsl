@@ -11,7 +11,6 @@ uniform mat4 mv_matrix;
 uniform mat4 proj_matrix;
 layout (binding=0) uniform sampler2D samp;
 
-out vec4 colorIntr;
 out vec2 varyingTc;
 
 void main(void)

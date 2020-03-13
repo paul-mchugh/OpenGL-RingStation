@@ -1,17 +1,23 @@
 
 #include "Util.h"
 #include <SOIL2/SOIL2.h>
+#include <glm/gtc/type_ptr.hpp>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <fstream>
 
+GLuint LineDrawer::vaoLn[1]={0};
+GLuint LineDrawer::shader=0;
+bool LineDrawer::isInit=false;
+
 bool Util::checkOpenGLError()
 {
 	bool hasErr = false;
 	for(int glErr = glGetError();glErr!=GL_NO_ERROR;glErr=glGetError())
 	{
+		hasErr = true;
 		printf("glError:\n%d: %s\n", glErr, Util::errCodeToString(glErr));
 	}
 	return hasErr;
@@ -196,6 +202,9 @@ GLuint Util::loadTexture(const char* filename)
 	GLuint textureID =
 		SOIL_load_OGL_texture(filename, SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_INVERT_Y);
 	if(textureID == 0) printf("Could not find texture file '%s'\n", filename);
+	glBindTexture(GL_TEXTURE_2D, textureID);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glGenerateMipmap(GL_TEXTURE_2D);
 	return textureID;
 }
 
@@ -211,4 +220,30 @@ void Util::printGLInfo()
 			"Version:      %s\n"
 			"GLSL Version: %s\n",
 			vendorStr, rendererStr, versionStr, GLSLVerStr);
+}
+
+void LineDrawer::draw(glm::mat4 p, glm::mat4 v, glm::vec3 src, glm::vec3 dst, glm::vec3 color)
+{
+	if(!isInit)
+	{
+		glGenVertexArrays(1, vaoLn);
+		shader = Util::createShaderProgram("lineVertShader.glsl", "lineFragShader.glsl");
+		isInit = true;
+	}
+
+	GLuint pMatHandle  = glGetUniformLocation(shader, "pMat");
+	GLuint vMatHandle  = glGetUniformLocation(shader, "vMat");
+	GLuint srcHandle   = glGetUniformLocation(shader, "src");
+	GLuint dstHandle   = glGetUniformLocation(shader, "dst");
+	GLuint colorHandle = glGetUniformLocation(shader, "color");
+	glUseProgram(shader);
+	glBindVertexArray(vaoLn[0]);
+	glUniformMatrix4fv(pMatHandle, 1, GL_FALSE, glm::value_ptr(p));
+	glUniformMatrix4fv(vMatHandle, 1, GL_FALSE, glm::value_ptr(v));
+	glUniform3fv(srcHandle, 1, glm::value_ptr(src));
+	glUniform3fv(dstHandle, 1, glm::value_ptr(dst));
+	glUniform3fv(colorHandle, 1, glm::value_ptr(color));
+
+	glLineWidth(5);
+	glDrawArrays(GL_LINES,0,2);
 }
