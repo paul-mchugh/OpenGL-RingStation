@@ -17,6 +17,7 @@ public:
 	void moveBy(glm::vec3 chPos);
 	void pan(float radians);
 	void pitch(float radians);
+	void roll(float radians);
 };
 
 #endif

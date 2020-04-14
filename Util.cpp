@@ -93,7 +93,8 @@ std::pair<char**, GLsizei> Util::readShader(const char* path)
 	{
 		getline(fStr, line);
 		line+='\n';
-		lines[lineCnt++]=strdup(line.c_str());
+		lines[lineCnt++]=(char*)malloc(line.length()+1);
+		strcpy(lines[lineCnt-1], line.c_str());
 		if(lineCnt==lineMax)
 		{
 			lineMax += 0x10;
@@ -116,12 +117,13 @@ GLuint Util::createShader(GLenum type, const char* path)
 {
 	GLint compiled=0;
 	//create shader
-	std::pair<char**,int> shadFile = Util::readShader(path);
+	std::pair<char**,GLsizei> shadFile = Util::readShader(path);
 	if(shadFile.first==NULL) return 0;
 	GLuint shaderID = glCreateShader(type);
 	glShaderSource(shaderID, shadFile.second, shadFile.first, NULL);
 	glCompileShader(shaderID);
     glGetShaderiv(shaderID, GL_COMPILE_STATUS, &compiled);
+	Util::deleteShaderFromMainMemory(shadFile);
 	if(compiled)
 	{
 		return shaderID;
@@ -220,6 +222,50 @@ void Util::printGLInfo()
 			"Version:      %s\n"
 			"GLSL Version: %s\n",
 			vendorStr, rendererStr, versionStr, GLSLVerStr);
+}
+
+Material Material::getCanvas(){
+	return Material{
+			.ambient{1.0f, 1.0f, 1.0f, 1}, .diffuse{1.0f, 1.0f, 1.0f, 1},
+			.specular{1.0f, 1.0f, 1.0f, 1}, .shininess{25.6f}};
+}
+Material Material::getGold(){
+	return Material{
+			.ambient{0.2473f, 0.1995f, 0.0745f, 1}, .diffuse{0.7516f, 0.6065f, 0.2265f, 1},
+			.specular{0.6283f, 0.5559f, 0.3661f, 1}, .shininess{51.2f}};
+}
+Material Material::getSilver(){
+	return Material{
+			.ambient{0.1923f, 0.1923f, 0.1923f, 1}, .diffuse{0.5075f, 0.5075f, 0.5075f, 1},
+			.specular{0.5083f, 0.5083f, 0.5083f, 1}, .shininess{51.2f}};
+}
+Material Material::getBronze(){
+	return Material{
+			.ambient{0.2125f, 0.1275f, 0.0540f, 1}, .diffuse{0.7140f, 0.4284f, 0.1814f, 1},
+			.specular{0.3936f, 0.2719f, 0.1667f, 1}, .shininess{51.2f}};
+}
+Material Material::getPearl(){
+	return Material{
+			.ambient{0.25f, 0.20725f, 0.20725f, 0.9222f}, .diffuse{1.0f, 0.829f, 0.829f, 0.922f},
+			.specular{0.2966f, 0.2966f, 0.2966f, 0.922f}, .shininess{51.2f}};
+}
+Material Material::getJade(){
+	return Material{
+			.ambient{0.135f, 0.2225f, 0.1575f, 0.95}, .diffuse{0.54f, 0.89f, 0.63f, 0.95f},
+			.specular{0.3162f, 0.3162, 0.3162f, 0.95f}, .shininess{12.8f}};
+}
+
+void Material::glTransfer(GLuint shader, std::string name)
+{
+	GLuint ambLOC, diffLOC, specLOC, shiLOC;
+	ambLOC  = glGetUniformLocation(shader, (name+".ambient").c_str());
+	diffLOC = glGetUniformLocation(shader, (name+".diffuse").c_str());
+	specLOC = glGetUniformLocation(shader, (name+".specular").c_str());
+	shiLOC  = glGetUniformLocation(shader, (name+".shininess").c_str());
+	glProgramUniform4fv(shader,  ambLOC, 1, (GLfloat*)&ambient);
+	glProgramUniform4fv(shader, diffLOC, 1, (GLfloat*)&diffuse);
+	glProgramUniform4fv(shader, specLOC, 1, (GLfloat*)&specular);
+	glProgramUniform4fv(shader,  shiLOC, 1, (GLfloat*)&shininess);
 }
 
 void LineDrawer::draw(glm::mat4 p, glm::mat4 v, glm::vec3 src, glm::vec3 dst, glm::vec3 color)

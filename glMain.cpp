@@ -5,7 +5,6 @@
 #include <cmath>
 #include <stack>
 #include <glm/gtc/type_ptr.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #include "Util.h"
 #include "Generator.h"
 #include "World.h"
@@ -25,9 +24,11 @@ void scroll_callback(GLFWwindow* window, double xScrOff, double yScrOff);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void printHelp(void);
 
+//global variables
 bool axesEnabled=false;
+bool paused=false;
 double lastTime=0;
-glm::vec3 cameraLOC(0,0,50);
+glm::vec3 cameraLOC(0,20,80);
 Camera c;
 glm::mat4 pMat, vMat;
 World wld;
@@ -46,9 +47,9 @@ int main()
 
 	while(!glfwWindowShouldClose(window))
 	{
+		glfwPollEvents();
 		display(window, glfwGetTime());
 		glfwSwapBuffers(window);
-		glfwPollEvents();
 	}
 
 	glfwDestroyWindow(window);
@@ -80,10 +81,13 @@ void init(GLFWwindow* window)
 	Model s    = Generator::generateSphere();
 	Model s1   = Generator::generateSphere();
 	Model s11  = Generator::generateSphere();
-	Model s111 = Generator::generateRingHab(0.3,0.1,0.1);
+	//habitat internal region is height=habwidth, width=2*pi*(1-wallThick)
+	//texture aspect ratio = 62.517777
+	Model s111 = Generator::generateRingHab(0.1,0.005,0.01,500);
 	Model s2   = Generator::generateSphere();
 	Model s21  = ModelImporter::parseOBJ("models/shuttle.obj");
 
+/*
 	Orbiter* obs    = new Orbiter{&wld, s, renderingProgram, sunTexture, 5,
 	                              20, 0, glm::radians(60.0f), glm::radians(80.0f),
 	                              0, glm::vec3{0.1f,1.0f,0.0f}, 15, 0.6f};
@@ -92,23 +96,28 @@ void init(GLFWwindow* window)
 	                              15, glm::vec3{0,1,0}, 5, 0.6f};
 	Orbiter* obs11  = new Orbiter{&wld, s11, renderingProgram, europaTexture, 1,
 	                              25, 0, glm::radians(20.0f), glm::radians(15.0f),
-	                              6, glm::vec3{0,1,1}, 5, 0.6f};
-	Orbiter* obs111 = new Orbiter{&wld, s111, renderingProgram, ringWldTexture, 0.5,
-	                              5, 0, glm::radians(45.0f), glm::radians(270.0f),
-	                              2, glm::vec3{0,1,0}, 5, 0.6f};
-	Orbiter* obs2   = new Orbiter{&wld, s2, renderingProgram, earthTexture, 2,
+	                              6, glm::vec3{0,1,1}, 5, 0.6f};*/
+	Object* obs111 =
+		Object::makeAbsolute(&wld, s111, renderingProgram, ringWldTexture, 100,
+		                     glm::vec3{0,0,0},
+		                     glm::vec3{0,1,0}, 40, 0);
+/*	Orbiter* obs2   = new Orbiter{&wld, s2, renderingProgram, earthTexture, 2,
 	                              25, 0, glm::radians(20.0f), glm::radians(180.0f),
-	                              20, glm::vec3{0,1,0}, 30, 0.6f};
-	Orbiter* obs21  = new Orbiter{&wld, s21, renderingProgram, shuttleTexture, 1,
-	                              10, 0, glm::radians(270.0f), glm::radians(90.0f),
-	                              3, glm::vec3{-1,0,0}, 10, 0.25};
+	                              20, glm::vec3{0,1,0}, 30, 0.6f};*/
+	Object* obs21 =
+		Object::makeRelative(&wld, s21, renderingProgram, shuttleTexture, 1,
+		                     glm::vec3{ 0,0,0.95},
+		                     glm::vec3{-1,0,0   }, 10, 0.25);
 
-	wld.setRoot(*obs);
+	obs111->addChild(*obs21);
+
+/*	wld.setRoot(*obs);
 	obs->addChild(*obs1);
 	obs1->addChild(*obs11);
 	obs11->addChild(*obs111);
 	obs->addChild(*obs2);
 	obs2->addChild(*obs21);
+	wld.setRoot(*obs111);*/
 
 	Util::printGLInfo();
 	printHelp();
@@ -120,7 +129,8 @@ void display(GLFWwindow* window, double currentTime)
 	//handle keyboard input
 	handleKeys(window, timeDiff);
 	//update the orbiters
-	wld.update(timeDiff);
+	if(!paused)
+		wld.update(timeDiff);
 	lastTime = currentTime;
 
 	//build perspective matrix
@@ -160,10 +170,12 @@ void handleKeys(GLFWwindow* window, double time)
 	if(GK(Q)) c.moveBy(glm::vec3{0,-moveMagnitude*time,0});
 	if(GK(A)) c.moveBy(glm::vec3{ moveMagnitude*time,0,0});
 	if(GK(D)) c.moveBy(glm::vec3{-moveMagnitude*time,0,0});
-	if(GK(UP)    ) c.pitch(glm::radians( rotateMagnitude*time));
-	if(GK(DOWN)  ) c.pitch(glm::radians(-rotateMagnitude*time));
-	if(GK(LEFT)  ) c.pan  (glm::radians( rotateMagnitude*time));
-	if(GK(RIGHT) ) c.pan  (glm::radians(-rotateMagnitude*time));
+	if(GK(UP)            ) c.pitch(glm::radians( rotateMagnitude*time));
+	if(GK(DOWN)          ) c.pitch(glm::radians(-rotateMagnitude*time));
+	if(GK(LEFT)          ) c.pan  (glm::radians( rotateMagnitude*time));
+	if(GK(RIGHT)         ) c.pan  (glm::radians(-rotateMagnitude*time));
+	if(GK(LEFT_BRACKET)  ) c.roll (glm::radians( rotateMagnitude*time));
+	if(GK(RIGHT_BRACKET) ) c.roll (glm::radians(-rotateMagnitude*time));
 }
 
 #undef GK
@@ -189,6 +201,11 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		c.setPos(cameraLOC);
 		printf("Pressed key  R: Camera reset\n");
 	}
+	else if(key == GLFW_KEY_P && action == GLFW_PRESS)
+	{
+		paused = !paused;
+		printf("Pressed key  P: Time %s\n",(paused?"Paused":"Unpaused"));
+	}
 	else if(key == GLFW_KEY_SPACE && action == GLFW_PRESS)
 	{
 		axesEnabled = !axesEnabled;
@@ -212,8 +229,9 @@ void printHelp(void)
 		"Usage:\n"
 		"Press any of the following keys while the window is selected\n"
 		"  ?:  View this help message in console(F1 also works)\n"
-		"  R:  Reset camera to original position ((0,0,30), looking a the origin)\n"
 		" ^Q:  Quit program(^W also works)\n"
+		"  R:  Reset camera to original position ((0,0,30), looking a the origin)\n"
+		"  P:  Toggle Pause time(default: off)\n"
 		" SP:  Use space bar to toggle axes(default: off)\n"
 		"W/S:  Forward/Backward\n"
 		"A/D:  Strafe left/Strafe right\n"
@@ -221,5 +239,6 @@ void printHelp(void)
 		" /\\:  Use up arrow key to pitch up\n"
 		"</>:  Use Left/Right arrow keys to pan Left/Right\n"
 		" \\/:  Use down arrow key to pitch down\n"
+		"[/]:  Use the open and close brackets to roll Left/Right\n"
 	);
 }

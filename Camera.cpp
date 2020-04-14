@@ -46,3 +46,10 @@ void Camera::pitch(float radians)
 	V = glm::vec3{pitchM * glm::vec4{V,1}};
 	N = glm::vec3{pitchM * glm::vec4{N,1}};
 }
+
+void Camera::roll(float radians)
+{
+	glm::mat4 rollM = glm::rotate<float>(glm::mat4{1.0f}, radians, N);
+	U = glm::vec3{rollM * glm::vec4{U,1}};
+	V = glm::vec3{rollM * glm::vec4{V,1}};
+}
