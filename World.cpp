@@ -9,6 +9,12 @@
 void World::init()
 {
 	glGenVertexArrays(VAOcnt, vao);
+	ambient={.ambient=glm::vec4{0.2,0.2,0.2,1},.enabled=true,.type=LightType::AMBIENT};
+	lights[0]=ambient;
+	directional={.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
+	             .specular=glm::vec4{1,1,1,1},.direction=glm::vec3{0,0,1},
+	             .enabled=true,.type=LightType::DIRECTIONAL};
+	lights[1]=directional;
 }
 
 void World::draw(std::stack<glm::mat4> mst)
@@ -38,7 +44,7 @@ void World::update(double timePassed)
 		objects[i]->updatePos(timePassed);
 }
 
-void World::relight(bool newLight)
+void World::relight()
 {
 	//we are going to compute the positions of the lights, declare a matrix stack
 	std::stack<glm::mat4> mst;
@@ -48,20 +54,32 @@ void World::relight(bool newLight)
 	for(int i=0;i<objects.size();++i)
 	{
 		std::unique_ptr<Object>& obj = objects[i];
-		if ((newLight | obj->lightChild) & obj->posType == PosType::ABSOLUTE)
+		if (obj->posType == PosType::ABSOLUTE)
 		{
 			//add translation for the absolute positioning
 			mst.push(mst.top()*glm::translate(glm::mat4{1.0f}, obj->p.a.pos));
-			obj->lightChild=obj->relight(mst,newLight)|obj->lightIndx!=-1;
+			obj->relight(mst);
 			//remove translation for the absolute positioning
 			mst.pop();
 		}
 	}
 }
 
-void Light::glTransfer(GLuint shader, std::string name, GLuint indx)
+void World::glTransferLights(glm::mat4 vMat, GLuint shader, std::string name)
 {
-	GLuint ambLOC, diffLOC, specLOC, posLOC, dirLOC, cutLOC, expLOC, typeLOC;
+	lights[0]=ambient;
+	lights[1]=directional;
+
+	for(GLuint i=0; i<World::MAX_LIGHTS; ++i)
+	{
+		lights[i].glTransfer(vMat, shader, name, i);
+	}
+}
+
+void Light::glTransfer(glm::mat4 vMat, GLuint shader, std::string name, GLuint indx)
+{
+	GLuint ambLOC, diffLOC, specLOC, posLOC, dirLOC, cutLOC, expLOC, enLOC, typeLOC;
+	glm::vec3 viewPos = glm::vec3{vMat * glm::vec4{position,1}};
 	std::string fName = name+"["+std::to_string(indx)+"]";
 	ambLOC  = glGetUniformLocation(shader, (fName+".ambient").c_str());
 	diffLOC = glGetUniformLocation(shader, (fName+".diffuse").c_str());
@@ -70,15 +88,17 @@ void Light::glTransfer(GLuint shader, std::string name, GLuint indx)
 	dirLOC  = glGetUniformLocation(shader, (fName+".direction").c_str());
 	cutLOC  = glGetUniformLocation(shader, (fName+".cutoff").c_str());
 	expLOC  = glGetUniformLocation(shader, (fName+".exponent").c_str());
+	enLOC   = glGetUniformLocation(shader, (fName+".enabled").c_str());
 	typeLOC = glGetUniformLocation(shader, (fName+".type").c_str());
-	glProgramUniform4fv(shader,  ambLOC, 1, (GLfloat*)&ambient);
-	glProgramUniform4fv(shader, diffLOC, 1, (GLfloat*)&diffuse);
-	glProgramUniform4fv(shader, specLOC, 1, (GLfloat*)&specular);
-	glProgramUniform4fv(shader,  posLOC, 1, (GLfloat*)&position);
-	glProgramUniform4fv(shader,  dirLOC, 1, (GLfloat*)&direction);
-	glProgramUniform4fv(shader,  cutLOC, 1, (GLfloat*)&cutoff);
-	glProgramUniform4fv(shader,  expLOC, 1, (GLfloat*)&exponent);
-	glProgramUniform4fv(shader, typeLOC, 1, (GLfloat*)&type);
+	glProgramUniform4fv(shader,  ambLOC, 1, glm::value_ptr(ambient));
+	glProgramUniform4fv(shader, diffLOC, 1, glm::value_ptr(diffuse));
+	glProgramUniform4fv(shader, specLOC, 1, glm::value_ptr(specular));
+	glProgramUniform3fv(shader,  posLOC, 1, glm::value_ptr(viewPos));
+	glProgramUniform3fv(shader,  dirLOC, 1, glm::value_ptr(direction));
+	glProgramUniform1f (shader,  cutLOC, (GLfloat)cutoff);
+	glProgramUniform1f (shader,  expLOC, (GLfloat)exponent);
+	glProgramUniform1ui(shader,   enLOC, (GLuint) enabled);
+	glProgramUniform1ui(shader, typeLOC, (GLuint) type);
 }
 
 Object::~Object()
@@ -88,7 +108,7 @@ Object::~Object()
 }
 
 Object::
-	Object(World* w, Model m, GLuint shader, GLuint texture, double scale,
+	Object(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
 	       glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress)
 {
 	//initialize vars
@@ -96,6 +116,7 @@ Object::
 	this->m=m;
 	this->shader=shader;
 	this->texture=texture;
+	this->mat=mat;
 	this->scale=scale;
 	this->axisOfRotation=glm::normalize(axisOfRot);
 	this->rotRate=(rotationPeriod==0)?0:1/rotationPeriod;
@@ -130,12 +151,12 @@ Object::
 
 Object*
 Object::
-	makeOrbiter(World* w, Model m, GLuint shader, GLuint texture, double scale,
+	makeOrbiter(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
 	            double orbitPeriod, double revProgress,
 	            double incline, double intercept, double dist,
 	            glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress)
 {
-	Object* obj = new Object(w, m, shader, texture, scale,
+	Object* obj = new Object(w, m, shader, texture, mat, scale,
 	                         axisOfRot, rotationPeriod, rotationProgress);
 	//set positioning type
 	obj->posType = PosType::ORBITING;
@@ -156,11 +177,11 @@ Object::
 
 Object*
 Object::
-	makeAbsolute(World* w, Model m, GLuint shader, GLuint texture, double scale,
+	makeAbsolute(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
 	             glm::vec3 pos,
 	             glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress)
 {
-	Object* obj = new Object(w, m, shader, texture, scale,
+	Object* obj = new Object(w, m, shader, texture, mat, scale,
 	                         axisOfRot, rotationPeriod, rotationProgress);
 	//set positioning type
 	obj->posType = PosType::ABSOLUTE;
@@ -172,11 +193,11 @@ Object::
 
 Object*
 Object::
-	makeRelative(World* w, Model m, GLuint shader, GLuint texture, double scale,
+	makeRelative(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
 	             glm::vec3 rPos,
 	             glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress)
 {
-	Object* obj = new Object(w, m, shader, texture, scale,
+	Object* obj = new Object(w, m, shader, texture, mat, scale,
 	                         axisOfRot, rotationPeriod, rotationProgress);
 
 	//set positioning type
@@ -257,9 +278,13 @@ void Object::draw(std::stack<glm::mat4>& mstack)
 
 	//send the uniforms to the GPU
 	GLuint mvHandle = glGetUniformLocation(shader, "mv_matrix");
-	glUniformMatrix4fv(mvHandle, 1, GL_FALSE, glm::value_ptr(mstack.top()));
+	glUniformMatrix4fv(mvHandle,   1, GL_FALSE, glm::value_ptr(mstack.top()));
+	GLuint normHandle = glGetUniformLocation(shader, "norm_matrix");
+	glm::mat4 normMat = glm::transpose(glm::inverse(mstack.top()));
+	glUniformMatrix4fv(normHandle, 1, GL_FALSE, glm::value_ptr(normMat));
 	GLuint texEnHandle = glGetUniformLocation(shader, "texEn");
 	glProgramUniform1i(shader, texEnHandle, texture!=0);
+	mat.glTransfer(shader, "material");
 
 	//send the texture to the GPU
 	if(texture!=0)
@@ -321,7 +346,63 @@ void Object::updatePos(double timePassed)
 	rotProgress = fmod(rotProgress +   rotRate*timePassed,1);
 }
 
-bool Object::relight(std::stack<glm::mat4>& mstack, bool newLight)
+void Object::relight(std::stack<glm::mat4>& mstack)
 {
-	return false;
+	//account for scale
+	mstack.push(mstack.top()*glm::scale<float>(glm::mat4{1.0f},glm::vec3{scale,scale,scale}));
+
+	//account for rotation
+	glm::mat4 rotation{1.0f};
+	glm::vec3& arot=axisOfRotation;
+	rotation *= glm::rotate<float>(glm::mat4{1.0f}, rotProgress*2*glm::pi<float>(), arot);
+
+	mstack.push(mstack.top()*rotation);
+
+	//compute light position if this is a lighted object
+	if(lightIndx!=-1)
+	{
+		w->lights[lightIndx].position = glm::vec3{mstack.top() * glm::vec4{0,0,0,1}};
+	}
+
+	//undo accounting for scale and rotation
+	mstack.pop();
+	mstack.pop();
+
+	//Draw children
+	for (std::size_t indx : children)
+	{
+		Object& child = *this->w->objects[indx];
+
+		//if the child is relatively positioned put the rotation back
+		//and translate by the relative position
+		if(child.posType==PosType::RELATIVE)
+		{
+			mstack.push(mstack.top()*rotation);
+			mstack.push(mstack.top()*glm::translate(glm::mat4{1.0f},(float)scale*child.p.r.rPos));
+		}
+
+		glm::mat4 revolution{1.0f};
+		//rotate around the axis of revolution
+		revolution *= glm::rotate<float>(glm::mat4{1.0f}, child.p.o.revProgress*2*glm::pi<float>(),
+		                                 child.p.o.axisOfRevolution);
+		glm::vec3 planetPos{child.p.o.orbitDist,0,0};
+		planetPos =
+			glm::vec3(glm::rotate<float>(glm::mat4{1.0f}, child.p.o.ecIntercept,
+			                             glm::vec3{0,1,0}) * glm::vec4{planetPos,1});
+		planetPos = glm::vec3(revolution * glm::vec4(planetPos,1));
+
+		mstack.push(mstack.top()*glm::translate(glm::mat4(1.0f),planetPos));
+
+		//walk children and update whether we have a lit child
+		child.relight(mstack);
+
+		mstack.pop();
+		//if the child is relatively positioned put the rotation back
+		//remove the translations and rotations
+		if(child.posType==PosType::RELATIVE)
+		{
+			mstack.pop();
+			mstack.pop();
+		}
+	}
 }

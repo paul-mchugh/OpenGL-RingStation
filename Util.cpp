@@ -262,10 +262,10 @@ void Material::glTransfer(GLuint shader, std::string name)
 	diffLOC = glGetUniformLocation(shader, (name+".diffuse").c_str());
 	specLOC = glGetUniformLocation(shader, (name+".specular").c_str());
 	shiLOC  = glGetUniformLocation(shader, (name+".shininess").c_str());
-	glProgramUniform4fv(shader,  ambLOC, 1, (GLfloat*)&ambient);
-	glProgramUniform4fv(shader, diffLOC, 1, (GLfloat*)&diffuse);
-	glProgramUniform4fv(shader, specLOC, 1, (GLfloat*)&specular);
-	glProgramUniform4fv(shader,  shiLOC, 1, (GLfloat*)&shininess);
+	glProgramUniform4fv(shader,  ambLOC, 1, glm::value_ptr(ambient));
+	glProgramUniform4fv(shader, diffLOC, 1, glm::value_ptr(diffuse));
+	glProgramUniform4fv(shader, specLOC, 1, glm::value_ptr(specular));
+	glProgramUniform1f (shader,  shiLOC, (GLfloat)shininess);
 }
 
 void LineDrawer::draw(glm::mat4 p, glm::mat4 v, glm::vec3 src, glm::vec3 dst, glm::vec3 color)

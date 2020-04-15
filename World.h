@@ -2,6 +2,7 @@
 #define WORLD_H
 
 #include "Model.h"
+#include "Util.h"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -33,10 +34,10 @@ struct Light
 	glm::vec3 direction;
 	float cutoff;
 	float exponent;
-	bool enabled;
-	LightType type;
+	bool enabled=false;
+	LightType type=LightType::NO_LIGHT;
 	//transfer for GL
-	void glTransfer(GLuint shader, std::string name, GLuint indx);
+	void glTransfer(glm::mat4 vMat, GLuint shader, std::string name, GLuint indx);
 };
 
 class Object;
@@ -50,10 +51,13 @@ class World
 	Light lights[MAX_LIGHTS];
 public:
 	glm::vec3 bgColor;
+	Light ambient;
+	Light directional;
 	void init();
 	void draw(std::stack<glm::mat4> mst);
 	void update(double timePassed);
-	void relight(bool newLight=false);
+	void relight();
+	void glTransferLights(glm::mat4 vMat, GLuint shader, std::string name);
 };
 
 class Object
@@ -64,10 +68,10 @@ private:
 	Model m;
 	GLuint shader;
 	GLuint texture;
+	Material mat;
 	GLuint vbo[5];
 	std::vector<int> children;
 	int lightIndx = -1;
-	bool lightChild = false;
 	PosType posType;
 	double scale;
 	union PositionData
@@ -93,21 +97,21 @@ private:
 	double rotRate;
 	double rotProgress;
 	std::size_t id;
-	Object(World* w, Model m, GLuint shader, GLuint texture, double scale,
+	Object(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
 	       glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress);
 public:
 	~Object();
 	static Object*
-	makeOrbiter(World* w, Model m, GLuint shader, GLuint texture, double scale,
+	makeOrbiter(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
 				double orbitPeriod, double revProgress,
 	            double incline, double intercept, double dist,
 	            glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress);
 	static Object*
-	makeAbsolute(World* w, Model m, GLuint shader, GLuint texture, double scale,
+	makeAbsolute(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
 	             glm::vec3 pos,
 	             glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress);
 	static Object*
-	makeRelative(World* w, Model m, GLuint shader, GLuint texture, double scale,
+	makeRelative(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
 	             glm::vec3 rPos,
 	             glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress);
 	bool addChild(Object& child);
@@ -116,7 +120,7 @@ public:
 	bool getLightEnabled();
 	void draw(std::stack<glm::mat4>& mstack);
 	void updatePos(double timePassed);
-	bool relight(std::stack<glm::mat4>& mstack, bool newLight);
+	void relight(std::stack<glm::mat4>& mstack);
 };
 
 #endif

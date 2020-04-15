@@ -12,7 +12,7 @@
 
 //globals
 const float rotateMagnitude = 30;
-const float moveMagnitude = 8;
+const float moveMagnitude = 10;
 GLuint renderingProgram;
 
 //forward declarations
@@ -28,9 +28,8 @@ void printHelp(void);
 bool axesEnabled=false;
 bool paused=false;
 double lastTime=0;
-glm::vec3 cameraLOC(0,20,80);
+glm::vec3 cameraLOC(0,0,80);
 Camera c;
-glm::mat4 pMat, vMat;
 World wld;
 
 int main()
@@ -87,37 +86,33 @@ void init(GLFWwindow* window)
 	Model s2   = Generator::generateSphere();
 	Model s21  = ModelImporter::parseOBJ("models/shuttle.obj");
 
-/*
-	Orbiter* obs    = new Orbiter{&wld, s, renderingProgram, sunTexture, 5,
-	                              20, 0, glm::radians(60.0f), glm::radians(80.0f),
-	                              0, glm::vec3{0.1f,1.0f,0.0f}, 15, 0.6f};
-	Orbiter* obs1   = new Orbiter{&wld, s1, renderingProgram, marsTexture, 2,
+	Material canvas = Material::getCanvas();
+
+//	Light sunlight{};
+
+	Object* obs =
+		Object::makeAbsolute(&wld, s, renderingProgram, sunTexture, canvas, 3,
+		                     glm::vec3{0,0,0},
+		                     glm::vec3{0.1f,1,0}, 15, 0.6f);
+/*	Orbiter* obs1   = new Orbiter{&wld, s1, renderingProgram, marsTexture, 2,
 	                              20, 0, glm::radians(20.0f), glm::radians(280.0f),
 	                              15, glm::vec3{0,1,0}, 5, 0.6f};
 	Orbiter* obs11  = new Orbiter{&wld, s11, renderingProgram, europaTexture, 1,
 	                              25, 0, glm::radians(20.0f), glm::radians(15.0f),
 	                              6, glm::vec3{0,1,1}, 5, 0.6f};*/
 	Object* obs111 =
-		Object::makeAbsolute(&wld, s111, renderingProgram, ringWldTexture, 100,
+		Object::makeAbsolute(&wld, s111, renderingProgram, ringWldTexture, canvas, 100,
 		                     glm::vec3{0,0,0},
-		                     glm::vec3{0,1,0}, 40, 0);
+		                     glm::vec3{0,1,0}, 60, 0);
 /*	Orbiter* obs2   = new Orbiter{&wld, s2, renderingProgram, earthTexture, 2,
 	                              25, 0, glm::radians(20.0f), glm::radians(180.0f),
 	                              20, glm::vec3{0,1,0}, 30, 0.6f};*/
 	Object* obs21 =
-		Object::makeRelative(&wld, s21, renderingProgram, shuttleTexture, 1,
+		Object::makeRelative(&wld, s21, renderingProgram, shuttleTexture, canvas, 1,
 		                     glm::vec3{ 0,0,0.95},
 		                     glm::vec3{-1,0,0   }, 10, 0.25);
 
 	obs111->addChild(*obs21);
-
-/*	wld.setRoot(*obs);
-	obs->addChild(*obs1);
-	obs1->addChild(*obs11);
-	obs11->addChild(*obs111);
-	obs->addChild(*obs2);
-	obs2->addChild(*obs21);
-	wld.setRoot(*obs111);*/
 
 	Util::printGLInfo();
 	printHelp();
@@ -128,23 +123,28 @@ void display(GLFWwindow* window, double currentTime)
 	double timeDiff=currentTime-lastTime;
 	//handle keyboard input
 	handleKeys(window, timeDiff);
-	//update the orbiters
+	//update the objects and relight
 	if(!paused)
 		wld.update(timeDiff);
+	wld.relight();
 	lastTime = currentTime;
 
-	//build perspective matrix
+	//build perspective and view matrices
+	glm::mat4 pMat, vMat;
 	int width, height;
 	glfwGetFramebufferSize(window, &width, &height);
 	float aspect = (float)width/(float)height;
 	pMat = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 1000.0f);
 	vMat = c.getTransform();
-
+	glm::mat4 invvMat = glm::transpose(glm::inverse(vMat));
 
 	//send the uniforms to the GPU
 	glUseProgram(renderingProgram);
 	GLuint projHandle = glGetUniformLocation(renderingProgram, "proj_matrix");
 	glUniformMatrix4fv(projHandle, 1, GL_FALSE, glm::value_ptr(pMat));
+	GLuint invvHandle = glGetUniformLocation(renderingProgram, "invv_matrix");
+	glUniformMatrix4fv(invvHandle, 1, GL_FALSE, glm::value_ptr(invvMat));
+	wld.glTransferLights(vMat, renderingProgram, "lights");
 
 	std::stack<glm::mat4> mst;
 	mst.push(glm::mat4(1.0f));

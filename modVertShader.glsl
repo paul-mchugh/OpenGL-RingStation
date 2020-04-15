@@ -21,6 +21,7 @@ struct Light
 	vec3 direction;
 	float cutoff;
 	float exponent;
+	bool enabled;
 	uint type;
 };
 
@@ -32,19 +33,49 @@ struct Material
 	float shininess;
 };
 
-uniform vec4 globalAmbientLight;
 uniform Light lights[MAX_LIGHTS];
 uniform Material material;
-uniform float zoom;
 uniform bool texEn;
 uniform mat4 mv_matrix;
+uniform mat4 invv_matrix;
 uniform mat4 proj_matrix;
+uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D samp;
 
 out vec2 varyingTc;
+out vec3 varyingNorm;
+out vec3 varyingLightDir[MAX_LIGHTS];
+out vec3 varyingVPos;
 
 void main(void)
 {
-	gl_Position = proj_matrix * mv_matrix * vec4(position,1.0);
+	//set position and pass it through to the shader
+	vec4 wsVertPos  = mv_matrix*vec4(position,1.0);
+	varyingVPos = wsVertPos.xyz;
+	gl_Position = proj_matrix * wsVertPos;
+
+	//compute norm and pass it through
+	varyingNorm = (norm_matrix * vec4(norm,1.0)).xyz;
+
+	//pass compute and pass each light direction
+	for(int i=0;i<MAX_LIGHTS;++i)
+	{
+		Light l = lights[i];
+		switch(l.type)
+		{
+		case POSITIONAL:
+			varyingLightDir[i] = l.position-varyingVPos;
+			break;
+		case DIRECTIONAL:
+		case SPOTLIGHT:
+			varyingLightDir[i] = (-(invv_matrix*vec4(l.direction,1))).xyz;
+			break;
+		case AMBIENT:
+		case NO_LIGHT:
+			break;
+		}
+	}
+
+	//pass the texture coordinates
 	varyingTc = tc;
 }
