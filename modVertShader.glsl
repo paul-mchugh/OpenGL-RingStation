@@ -46,6 +46,7 @@ layout (binding=0) uniform sampler2D samp;
 out vec2 varyingTc;
 out vec3 varyingNorm;
 out vec3 varyingLightDir[MAX_LIGHTS];
+out vec3 varyingHalfVec [MAX_LIGHTS];
 out vec3 varyingVPos;
 
 void main(void)
@@ -75,6 +76,8 @@ void main(void)
 		case NO_LIGHT:
 			break;
 		}
+		varyingHalfVec[i] = normalize(varyingLightDir[i]) - normalize(varyingVPos);
+
 	}
 
 	//pass the texture coordinates

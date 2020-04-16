@@ -45,6 +45,7 @@ layout (binding=0) uniform sampler2D samp;
 in vec2 varyingTc;
 in vec3 varyingNorm;
 in vec3 varyingLightDir[MAX_LIGHTS];
+in vec3 varyingHalfVec [MAX_LIGHTS];
 in vec3 varyingVPos;
 
 out vec4 color;
@@ -89,9 +90,11 @@ void main(void)
 				if(i==atLight)cosTheta=1;
 				diffWSum += l.diffuse.xyz * max(cosTheta,0.0)*diffFactor;
 				//specular contribution
-				vec3 R = normalize(reflect(-L,N));
-				float cosPhi = dot(V,R);
-				specWSum += l.specular.xyz * pow(max(cosPhi,0.0), material.shininess)*specFactor;
+				//vec3 R = normalize(reflect(-L,N));
+				//float cosPhi = dot(V,R);
+				vec3 H = normalize(varyingHalfVec[i]);
+				float cosPhi = dot(H,N);
+				specWSum += l.specular.xyz * pow(max(cosPhi,0.0), material.shininess*3)*specFactor;
 			}
 		}
 	}
