@@ -6,7 +6,7 @@
 #define POSITIONAL  2
 #define DIRECTIONAL 3
 #define SPOTLIGHT   4
-#define KM 1
+#define KD 10
 #define KC 1
 #define KL 0
 #define KQ 0.000125
@@ -67,21 +67,31 @@ void main(void)
 			ambientSum+=l.ambient.xyz;
 			if(l.type!=AMBIENT)
 			{
-				float attFactor = 1;
+				vec3 L = normalize(varyingLightDir[i]);
+				float diffFactor = 1, specFactor = 1;
 				if(l.type==POSITIONAL)
 				{
-					float dist = max(length(l.position-varyingVPos)-4,0);
-					attFactor = 1/(KC+dist*KL+dist*dist*KQ);
+					float dist = length(l.position-varyingVPos);
+					float adjDist = max(dist-KD,0);
+					diffFactor = 1/(KC+adjDist*KL+adjDist*adjDist*KQ);
+					specFactor = 1/(KC+dist*KL+dist*dist*KQ);
+				}
+				else if(l.type==SPOTLIGHT)
+				{
+					vec3 D = (invv_matrix*vec4(l.direction,1)).xyz;
+					float offAxisCosPhi = dot(D,-L);
+					float cfMin = cos(l.cutoff);
+					diffFactor=(cfMin<offAxisCosPhi)?pow(offAxisCosPhi,l.exponent):0;
+					specFactor=diffFactor;
 				}
 				//diffuse contribution
-				vec3 L = normalize(varyingLightDir[i]);
 				float cosTheta = dot(L,N);
 				if(i==atLight)cosTheta=1;
-				diffWSum += l.diffuse.xyz * max(cosTheta,0.0)*attFactor;
+				diffWSum += l.diffuse.xyz * max(cosTheta,0.0)*diffFactor;
 				//specular contribution
 				vec3 R = normalize(reflect(-L,N));
 				float cosPhi = dot(V,R);
-				specWSum += l.specular.xyz * pow(max(cosPhi,0.0), material.shininess*2)*attFactor;
+				specWSum += l.specular.xyz * pow(max(cosPhi,0.0), material.shininess)*specFactor;
 			}
 		}
 	}

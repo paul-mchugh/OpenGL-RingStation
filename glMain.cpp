@@ -13,6 +13,7 @@
 //globals
 const float rotateMagnitude = 30;
 const float moveMagnitude = 10;
+const float spotOff = 5;
 GLuint renderingProgram;
 
 //forward declarations
@@ -77,46 +78,74 @@ void init(GLFWwindow* window)
 	GLuint earthTexture   = Util::loadTexture("img/earth.jpg");
 	GLuint shuttleTexture = Util::loadTexture("img/spstob_1.jpg");
 
-	Model s    = Generator::generateSphere();
-	Model s1   = Generator::generateSphere();
-	Model s11  = Generator::generateSphere();
 	//habitat internal region is height=habwidth, width=2*pi*(1-wallThick)
 	//texture aspect ratio = 62.517777
-	Model s111 = Generator::generateRingHab(0.1,0.005,0.01,500);
+	Model sunm  = Generator::generateSphere();
+	Model rh   = Generator::generateRingHab(0.1,0.005,0.01,500);
+	Model shu  = ModelImporter::parseOBJ("models/shuttle.obj");
 	Model s2   = Generator::generateSphere();
-	Model s21  = ModelImporter::parseOBJ("models/shuttle.obj");
+	Model spot  = Generator::generateSphere();
 
 	Material canvas = Material::getCanvas();
+	Material silver = Material::getSilver();
 
 	Light sunlight{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
 	               .specular=glm::vec4{0.5,0.5,0.5,1},
 	               .enabled=true,.type=LightType::POSITIONAL};
+	Light sllzp{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
+	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{ 0,0, 1,1},
+	            .cutoff=glm::radians(22.5f),.exponent=30,
+	            .enabled=true,.type=LightType::SPOTLIGHT};
+	Light sllzm{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
+	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{ 0,0,-1,1},
+	            .cutoff=glm::radians(22.5f),.exponent=30,
+	            .enabled=true,.type=LightType::SPOTLIGHT};
+	Light sllxp{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
+	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{ 1,0, 0,1},
+	            .cutoff=glm::radians(22.5f),.exponent=30,
+	            .enabled=true,.type=LightType::SPOTLIGHT};
+	Light sllxm{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
+	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{-1,0, 0,1},
+	            .cutoff=glm::radians(22.5f),.exponent=30,
+	            .enabled=true,.type=LightType::SPOTLIGHT};
 
-
-	Object* obs =
-		Object::makeAbsolute(&wld, s, renderingProgram, sunTexture, canvas, 1,
-		                     glm::vec3{0,0,-95},
+	float zOff = 0;
+	Object* slzp =
+		Object::makeAbsolute(&wld, spot, renderingProgram, 0, silver, 1,
+		                     glm::vec3{       0, zOff, spotOff},
+		                     glm::vec3{0,1,0}, 0, 0.0f);
+	Object* slzm =
+		Object::makeAbsolute(&wld, spot, renderingProgram, 0, silver, 1,
+		                     glm::vec3{       0, zOff,-spotOff},
+		                     glm::vec3{0,1,0}, 0, 0.25f);
+	Object* slxp =
+		Object::makeAbsolute(&wld, spot, renderingProgram, 0, silver, 1,
+		                     glm::vec3{ spotOff, zOff, 0},
+		                     glm::vec3{0,1,0}, 0, 0.5f);
+	Object* slxm =
+		Object::makeAbsolute(&wld, spot, renderingProgram, 0, silver, 1,
+		                     glm::vec3{-spotOff, zOff, 0},
+		                     glm::vec3{0,1,0}, 0, 0.75f);
+	Object* sun =
+		Object::makeAbsolute(&wld, sunm, renderingProgram, sunTexture, canvas, 1,
+		                     glm::vec3{-64,0,-64},
 		                     glm::vec3{0.1f,1,0}, 15, 0.6f);
-/*	Orbiter* obs1   = new Orbiter{&wld, s1, renderingProgram, marsTexture, 2,
-	                              20, 0, glm::radians(20.0f), glm::radians(280.0f),
-	                              15, glm::vec3{0,1,0}, 5, 0.6f};
-	Orbiter* obs11  = new Orbiter{&wld, s11, renderingProgram, europaTexture, 1,
-	                              25, 0, glm::radians(20.0f), glm::radians(15.0f),
-	                              6, glm::vec3{0,1,1}, 5, 0.6f};*/
-	Object* obs111 =
-		Object::makeAbsolute(&wld, s111, renderingProgram, ringWldTexture, canvas, 100,
+	Object* ringHab =
+		Object::makeAbsolute(&wld, rh, renderingProgram, ringWldTexture, canvas, 100,
 		                     glm::vec3{0,0,0},
 		                     glm::vec3{0,1,0}, 60, 0);
-/*	Orbiter* obs2   = new Orbiter{&wld, s2, renderingProgram, earthTexture, 2,
-	                              25, 0, glm::radians(20.0f), glm::radians(180.0f),
-	                              20, glm::vec3{0,1,0}, 30, 0.6f};*/
-	Object* obs21 =
-		Object::makeRelative(&wld, s21, renderingProgram, shuttleTexture, canvas, 1,
+	Object* shuttle =
+		Object::makeRelative(&wld, shu, renderingProgram, shuttleTexture, canvas, 1,
 		                     glm::vec3{ 0,0,0.95},
 		                     glm::vec3{-1,0,0   }, 10, 0.25);
 
-	obs->attachLight(sunlight);
-	obs111->addChild(*obs21);
+	sun->attachLight(sunlight);
+	slzp->attachLight(sllzp);
+	slzm->attachLight(sllzm);
+	slxp->attachLight(sllxp);
+	slxm->attachLight(sllxm);
+
+	ringHab->addChild(*shuttle);
 
 	Util::printGLInfo();
 	printHelp();
@@ -163,7 +192,7 @@ void display(GLFWwindow* window, double currentTime)
 		LineDrawer::draw(pMat, vMat, glm::vec3(0,0,0), glm::vec3(9,0,0), glm::vec3(1,0,0));
 		LineDrawer::draw(pMat, vMat, glm::vec3(0,0,0), glm::vec3(0,9,0), glm::vec3(0,1,0));
 		LineDrawer::draw(pMat, vMat, glm::vec3(0,0,0), glm::vec3(0,0,9), glm::vec3(0,0,1));
-		wld.drawVecToLight(pMat, vMat);
+		wld.drawLightVecs(pMat, vMat);
 	}
 }
 

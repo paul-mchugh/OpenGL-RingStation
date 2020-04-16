@@ -58,7 +58,7 @@ public:
 	void update(double timePassed);
 	void relight();
 	void glTransferLights(glm::mat4 vMat, GLuint shader, std::string name);
-	void drawVecToLight(glm::mat4 pMat, glm::mat4 vMat);
+	void drawLightVecs(glm::mat4 pMat, glm::mat4 vMat);
 };
 
 class Object

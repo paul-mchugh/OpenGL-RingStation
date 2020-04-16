@@ -65,10 +65,10 @@ void main(void)
 		switch(l.type)
 		{
 		case POSITIONAL:
+		case SPOTLIGHT:
 			varyingLightDir[i] = l.position-varyingVPos;
 			break;
 		case DIRECTIONAL:
-		case SPOTLIGHT:
 			varyingLightDir[i] = (-(invv_matrix*vec4(l.direction,1))).xyz;
 			break;
 		case AMBIENT:

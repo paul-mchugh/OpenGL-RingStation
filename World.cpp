@@ -75,13 +75,19 @@ void World::glTransferLights(glm::mat4 vMat, GLuint shader, std::string name)
 	}
 }
 
-void World::drawVecToLight(glm::mat4 pMat, glm::mat4 vMat)
+void World::drawLightVecs(glm::mat4 pMat, glm::mat4 vMat)
 {
 	for(int i=0;i<MAX_LIGHTS;++i)
 	{
 		Light l = lights[i];
 		if(l.type==LightType::POSITIONAL||l.type==LightType::SPOTLIGHT)
-			LineDrawer::draw(pMat, vMat, glm::vec3{0}, l.position, glm::vec3{0.5,0,0.5});
+			LineDrawer::draw(pMat, vMat, glm::vec3{0}, l.position, glm::vec3{1,0,1});
+		if(l.type==LightType::SPOTLIGHT)
+		{
+			glm::vec3 sp = l.position;
+			glm::vec3 ep = sp+glm::normalize(l.direction)*5.0f;
+			LineDrawer::draw(pMat, vMat, sp, ep, glm::vec3{1,1,0});
+		}
 	}
 }
 
