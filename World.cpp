@@ -9,7 +9,7 @@
 void World::init()
 {
 	glGenVertexArrays(VAOcnt, vao);
-	ambient={.ambient=glm::vec4{0.2,0.2,0.2,1},.enabled=true,.type=LightType::AMBIENT};
+	ambient={.ambient=glm::vec4{0.1,0.1,0.1,1},.enabled=true,.type=LightType::AMBIENT};
 	lights[0]=ambient;
 	directional={.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
 	             .specular=glm::vec4{1,1,1,1},.direction=glm::vec3{0,0,1},
@@ -46,9 +46,8 @@ void World::update(double timePassed)
 
 void World::relight()
 {
-	//we are going to compute the positions of the lights, declare a matrix stack
 	std::stack<glm::mat4> mst;
-	mst.push(glm::mat4{1.0f});
+	mst.push(glm::mat4{1});
 
 	//relight absolutely positioned objects
 	for(int i=0;i<objects.size();++i)
@@ -73,6 +72,16 @@ void World::glTransferLights(glm::mat4 vMat, GLuint shader, std::string name)
 	for(GLuint i=0; i<World::MAX_LIGHTS; ++i)
 	{
 		lights[i].glTransfer(vMat, shader, name, i);
+	}
+}
+
+void World::drawVecToLight(glm::mat4 pMat, glm::mat4 vMat)
+{
+	for(int i=0;i<MAX_LIGHTS;++i)
+	{
+		Light l = lights[i];
+		if(l.type==LightType::POSITIONAL||l.type==LightType::SPOTLIGHT)
+			LineDrawer::draw(pMat, vMat, glm::vec3{0}, l.position, glm::vec3{0.5,0,0.5});
 	}
 }
 
@@ -231,7 +240,7 @@ bool Object::attachLight(Light& light)
 	//find an index for the light (if it does not have one)
 	if(lightIndx==-1)
 		for(int i=0;i<World::MAX_LIGHTS;++i)
-			if(w->lights[lightIndx].type==LightType::NO_LIGHT)
+			if(w->lights[i].type==LightType::NO_LIGHT)
 				lightIndx=i;
 			else if(i==World::MAX_LIGHTS-i)
 				return false;
@@ -284,6 +293,8 @@ void Object::draw(std::stack<glm::mat4>& mstack)
 	glUniformMatrix4fv(normHandle, 1, GL_FALSE, glm::value_ptr(normMat));
 	GLuint texEnHandle = glGetUniformLocation(shader, "texEn");
 	glProgramUniform1i(shader, texEnHandle, texture!=0);
+	GLuint atLightHandle = glGetUniformLocation(shader, "atLight");
+	glProgramUniform1i(shader, atLightHandle, lightIndx);
 	mat.glTransfer(shader, "material");
 
 	//send the texture to the GPU

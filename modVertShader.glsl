@@ -36,6 +36,7 @@ struct Material
 uniform Light lights[MAX_LIGHTS];
 uniform Material material;
 uniform bool texEn;
+uniform int atLight;
 uniform mat4 mv_matrix;
 uniform mat4 invv_matrix;
 uniform mat4 proj_matrix;

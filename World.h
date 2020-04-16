@@ -58,6 +58,7 @@ public:
 	void update(double timePassed);
 	void relight();
 	void glTransferLights(glm::mat4 vMat, GLuint shader, std::string name);
+	void drawVecToLight(glm::mat4 pMat, glm::mat4 vMat);
 };
 
 class Object
@@ -71,7 +72,7 @@ private:
 	Material mat;
 	GLuint vbo[5];
 	std::vector<int> children;
-	int lightIndx = -1;
+	GLint lightIndx = -1;
 	PosType posType;
 	double scale;
 	union PositionData

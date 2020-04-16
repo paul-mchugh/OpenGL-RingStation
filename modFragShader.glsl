@@ -6,6 +6,10 @@
 #define POSITIONAL  2
 #define DIRECTIONAL 3
 #define SPOTLIGHT   4
+#define KM 1
+#define KC 1
+#define KL 0
+#define KQ 0.000125
 
 struct Light
 {
@@ -31,6 +35,7 @@ struct Material
 uniform Light lights[MAX_LIGHTS];
 uniform Material material;
 uniform bool texEn;
+uniform int atLight;
 uniform mat4 mv_matrix;
 uniform mat4 invv_matrix;
 uniform mat4 proj_matrix;
@@ -62,14 +67,21 @@ void main(void)
 			ambientSum+=l.ambient.xyz;
 			if(l.type!=AMBIENT)
 			{
+				float attFactor = 1;
+				if(l.type==POSITIONAL)
+				{
+					float dist = max(length(l.position-varyingVPos)-4,0);
+					attFactor = 1/(KC+dist*KL+dist*dist*KQ);
+				}
 				//diffuse contribution
 				vec3 L = normalize(varyingLightDir[i]);
 				float cosTheta = dot(L,N);
-				diffWSum += l.diffuse.xyz * max(cosTheta,0.0);
+				if(i==atLight)cosTheta=1;
+				diffWSum += l.diffuse.xyz * max(cosTheta,0.0)*attFactor;
 				//specular contribution
 				vec3 R = normalize(reflect(-L,N));
 				float cosPhi = dot(V,R);
-				specWSum += l.specular.xyz * pow(max(cosPhi,0.0), material.shininess*2);
+				specWSum += l.specular.xyz * pow(max(cosPhi,0.0), material.shininess*2)*attFactor;
 			}
 		}
 	}

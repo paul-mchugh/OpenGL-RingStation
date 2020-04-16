@@ -28,7 +28,7 @@ void printHelp(void);
 bool axesEnabled=false;
 bool paused=false;
 double lastTime=0;
-glm::vec3 cameraLOC(0,0,80);
+glm::vec3 cameraLOC(0,0,-80);
 Camera c;
 World wld;
 
@@ -37,7 +37,7 @@ int main()
 	if(!glfwInit()) exit(1);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	GLFWwindow* window = glfwCreateWindow(600, 600, "CSC155: HW2", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(600, 600, "CSC155: HW3", NULL, NULL);
 	glfwMakeContextCurrent(window);
 	if(glewInit() != GLEW_OK) exit(1);
 	glfwSwapInterval(1);
@@ -88,11 +88,14 @@ void init(GLFWwindow* window)
 
 	Material canvas = Material::getCanvas();
 
-//	Light sunlight{};
+	Light sunlight{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
+	               .specular=glm::vec4{0.5,0.5,0.5,1},
+	               .enabled=true,.type=LightType::POSITIONAL};
+
 
 	Object* obs =
-		Object::makeAbsolute(&wld, s, renderingProgram, sunTexture, canvas, 3,
-		                     glm::vec3{0,0,0},
+		Object::makeAbsolute(&wld, s, renderingProgram, sunTexture, canvas, 1,
+		                     glm::vec3{0,0,-95},
 		                     glm::vec3{0.1f,1,0}, 15, 0.6f);
 /*	Orbiter* obs1   = new Orbiter{&wld, s1, renderingProgram, marsTexture, 2,
 	                              20, 0, glm::radians(20.0f), glm::radians(280.0f),
@@ -112,6 +115,7 @@ void init(GLFWwindow* window)
 		                     glm::vec3{ 0,0,0.95},
 		                     glm::vec3{-1,0,0   }, 10, 0.25);
 
+	obs->attachLight(sunlight);
 	obs111->addChild(*obs21);
 
 	Util::printGLInfo();
@@ -126,7 +130,6 @@ void display(GLFWwindow* window, double currentTime)
 	//update the objects and relight
 	if(!paused)
 		wld.update(timeDiff);
-	wld.relight();
 	lastTime = currentTime;
 
 	//build perspective and view matrices
@@ -138,6 +141,12 @@ void display(GLFWwindow* window, double currentTime)
 	vMat = c.getTransform();
 	glm::mat4 invvMat = glm::transpose(glm::inverse(vMat));
 
+	//relight now that we have a view matrix
+	std::stack<glm::mat4> mst;
+	mst.push(glm::mat4(1.0f));
+	mst.push(mst.top()*vMat);
+	wld.relight();
+
 	//send the uniforms to the GPU
 	glUseProgram(renderingProgram);
 	GLuint projHandle = glGetUniformLocation(renderingProgram, "proj_matrix");
@@ -146,9 +155,6 @@ void display(GLFWwindow* window, double currentTime)
 	glUniformMatrix4fv(invvHandle, 1, GL_FALSE, glm::value_ptr(invvMat));
 	wld.glTransferLights(vMat, renderingProgram, "lights");
 
-	std::stack<glm::mat4> mst;
-	mst.push(glm::mat4(1.0f));
-	mst.push(mst.top()*vMat);
 	wld.draw(mst);
 
 	if(axesEnabled)
@@ -157,6 +163,7 @@ void display(GLFWwindow* window, double currentTime)
 		LineDrawer::draw(pMat, vMat, glm::vec3(0,0,0), glm::vec3(9,0,0), glm::vec3(1,0,0));
 		LineDrawer::draw(pMat, vMat, glm::vec3(0,0,0), glm::vec3(0,9,0), glm::vec3(0,1,0));
 		LineDrawer::draw(pMat, vMat, glm::vec3(0,0,0), glm::vec3(0,0,9), glm::vec3(0,0,1));
+		wld.drawVecToLight(pMat, vMat);
 	}
 }
 
