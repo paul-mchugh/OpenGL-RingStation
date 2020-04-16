@@ -9,6 +9,11 @@
 void World::init()
 {
 	glGenVertexArrays(VAOcnt, vao);
+	for(int i=0; i<MAX_LIGHTS; ++i)
+	{
+		lights[i]={.enabled=false,.type=LightType::NO_LIGHT};
+		shadowTextures[i]=0;
+	}
 	ambient={.ambient=glm::vec4{0.1,0.1,0.1,1},.enabled=true,.type=LightType::AMBIENT};
 	lights[0]=ambient;
 	directional={.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
@@ -64,10 +69,63 @@ void World::relight()
 	}
 }
 
+void World::replaceLight(Light lNew, GLuint indx)
+{
+	Light lOld = lights[indx];
+	int oldTexType=0;
+	oldTexType+=(lOld.type!=LightType::NO_LIGHT&lOld.type!=LightType::AMBIENT);
+	oldTexType+=(lOld.type==LightType::POSITIONAL);
+	int newTexType=0;
+	newTexType+=(lNew.type!=LightType::NO_LIGHT&lNew.type!=LightType::AMBIENT);
+	newTexType+=(lNew.type==LightType::POSITIONAL);
+
+	if(oldTexType>0 && oldTexType!=newTexType)
+		glDeleteTextures(1,&shadowTextures[indx]);
+
+	if(newTexType>0 && oldTexType!=newTexType)
+	{
+		if(lNew.type==LightType::POSITIONAL)
+		{
+			//create the cudemap texture
+			glGenTextures(1, &shadowTextures[indx]);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, shadowTextures[indx]);
+			for(GLuint i = 0; i<6; ++i)
+				glTexImage2D(cubemapFaces[i], 0, GL_DEPTH_COMPONENT, shadRes, shadRes,
+				             0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		}
+		else if(lNew.type==LightType::DIRECTIONAL||lNew.type==LightType::SPOTLIGHT)
+		{
+			//create a 2d texture
+			glGenTextures(1, &shadowTextures[indx]);
+			glBindTexture(GL_TEXTURE_2D, shadowTextures[indx]);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
+			             shadRes, shadRes, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		}
+	}
+
+	//replace the light entry.
+	lights[indx]=lNew;
+
+}
+
 void World::glTransferLights(glm::mat4 vMat, GLuint shader, std::string name)
 {
-	lights[0]=ambient;
-	lights[1]=directional;
+	ambient.type=LightType::AMBIENT;
+	directional.type=LightType::DIRECTIONAL;
+	replaceLight(ambient,0);
+	replaceLight(directional,0);
 
 	for(GLuint i=0; i<World::MAX_LIGHTS; ++i)
 	{
@@ -118,8 +176,8 @@ void Light::glTransfer(glm::mat4 vMat, GLuint shader, std::string name, GLuint i
 
 Object::~Object()
 {
-	if(lightIndx==-1)
-		w->lights[lightIndx].type=LightType::NO_LIGHT;
+	if(lightIndx!=-1)
+		w->replaceLight({.type=LightType::NO_LIGHT},lightIndx);
 }
 
 Object::
@@ -238,7 +296,7 @@ bool Object::attachLight(Light& light)
 	if(light.type==LightType::NO_LIGHT)
 	{
 		if(lightIndx!=-1)
-			w->lights[lightIndx].type=LightType::NO_LIGHT;
+			w->replaceLight({.type=LightType::NO_LIGHT},lightIndx);
 		lightIndx=-1;
 		return true;
 	}
@@ -252,7 +310,7 @@ bool Object::attachLight(Light& light)
 				return false;
 
 	//copy light return true
-	w->lights[lightIndx]=light;
+	w->replaceLight(light,lightIndx);
 	return true;
 }
 
@@ -329,30 +387,26 @@ void Object::draw(std::stack<glm::mat4>& mstack)
 		//and translate by the relative position
 		if(child.posType==PosType::RELATIVE)
 		{
-			mstack.push(mstack.top()*rotation);
-			mstack.push(mstack.top()*glm::translate(glm::mat4{1.0f},(float)scale*child.p.r.rPos));
+			mstack.push(mstack.top()*rotation*glm::translate(glm::mat4{1.0f},(float)scale*child.p.r.rPos));
 		}
-
-		glm::mat4 revolution{1.0f};
-		//rotate around the axis of revolution
-		revolution *= glm::rotate<float>(glm::mat4{1.0f}, child.p.o.revProgress*2*glm::pi<float>(),
-		                                 child.p.o.axisOfRevolution);
-		glm::vec3 planetPos{child.p.o.orbitDist,0,0};
-		planetPos =
-			glm::vec3(glm::rotate<float>(glm::mat4{1.0f}, child.p.o.ecIntercept,
-			                             glm::vec3{0,1,0}) * glm::vec4{planetPos,1});
-		planetPos = glm::vec3(revolution * glm::vec4(planetPos,1));
-
-		mstack.push(mstack.top()*glm::translate(glm::mat4(1.0f),planetPos));
-		child.draw(mstack);
-		mstack.pop();
-		//if the child is relatively positioned put the rotation back
-		//remove the translations and rotations
-		if(child.posType==PosType::RELATIVE)
+		else if(child.posType==PosType::ORBITING)
 		{
-			mstack.pop();
-			mstack.pop();
+			glm::mat4 revolution{1.0f};
+			//rotate around the axis of revolution
+			revolution *= glm::rotate<float>(glm::mat4{1.0f}, child.p.o.revProgress*2*glm::pi<float>(),
+			                                 child.p.o.axisOfRevolution);
+			glm::vec3 planetPos{child.p.o.orbitDist,0,0};
+			planetPos =
+				glm::vec3(glm::rotate<float>(glm::mat4{1.0f}, child.p.o.ecIntercept,
+			                             glm::vec3{0,1,0}) * glm::vec4{planetPos,1});
+			planetPos = glm::vec3(revolution * glm::vec4(planetPos,1));
+
+			mstack.push(mstack.top()*glm::translate(glm::mat4(1.0f),planetPos));
 		}
+		child.draw(mstack);
+		//remove the top matrix whether it cam from the relative or orbiting properties
+		if(child.posType==PosType::RELATIVE||child.posType==PosType::ORBITING)
+			mstack.pop();
 	}
 }
 
@@ -389,37 +443,29 @@ void Object::relight(std::stack<glm::mat4>& mstack)
 	for (std::size_t indx : children)
 	{
 		Object& child = *this->w->objects[indx];
-
 		//if the child is relatively positioned put the rotation back
 		//and translate by the relative position
 		if(child.posType==PosType::RELATIVE)
 		{
-			mstack.push(mstack.top()*rotation);
-			mstack.push(mstack.top()*glm::translate(glm::mat4{1.0f},(float)scale*child.p.r.rPos));
+			mstack.push(mstack.top()*rotation*glm::translate(glm::mat4{1.0f},(float)scale*child.p.r.rPos));
 		}
-
-		glm::mat4 revolution{1.0f};
-		//rotate around the axis of revolution
-		revolution *= glm::rotate<float>(glm::mat4{1.0f}, child.p.o.revProgress*2*glm::pi<float>(),
-		                                 child.p.o.axisOfRevolution);
-		glm::vec3 planetPos{child.p.o.orbitDist,0,0};
-		planetPos =
-			glm::vec3(glm::rotate<float>(glm::mat4{1.0f}, child.p.o.ecIntercept,
-			                             glm::vec3{0,1,0}) * glm::vec4{planetPos,1});
-		planetPos = glm::vec3(revolution * glm::vec4(planetPos,1));
-
-		mstack.push(mstack.top()*glm::translate(glm::mat4(1.0f),planetPos));
-
-		//walk children and update whether we have a lit child
-		child.relight(mstack);
-
-		mstack.pop();
-		//if the child is relatively positioned put the rotation back
-		//remove the translations and rotations
-		if(child.posType==PosType::RELATIVE)
+		else if(child.posType==PosType::ORBITING)
 		{
-			mstack.pop();
-			mstack.pop();
+			glm::mat4 revolution{1.0f};
+			//rotate around the axis of revolution
+			revolution *= glm::rotate<float>(glm::mat4{1.0f}, child.p.o.revProgress*2*glm::pi<float>(),
+			                                 child.p.o.axisOfRevolution);
+			glm::vec3 planetPos{child.p.o.orbitDist,0,0};
+			planetPos =
+				glm::vec3(glm::rotate<float>(glm::mat4{1.0f}, child.p.o.ecIntercept,
+			                             glm::vec3{0,1,0}) * glm::vec4{planetPos,1});
+			planetPos = glm::vec3(revolution * glm::vec4(planetPos,1));
+
+			mstack.push(mstack.top()*glm::translate(glm::mat4(1.0f),planetPos));
 		}
+		child.relight(mstack);
+		//remove the top matrix whether it cam from the relative or orbiting properties
+		if(child.posType==PosType::RELATIVE||child.posType==PosType::ORBITING)
+			mstack.pop();
 	}
 }

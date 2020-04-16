@@ -9,6 +9,18 @@
 #include <stack>
 #include <memory>
 
+//constants
+const GLuint cubemapFaces[] =
+{
+	GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+	GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+	GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
+};
+const GLsizei shadRes=1024;//all opengl GPUs are guaranteed to support 1024x1024 textures
+
 enum class PosType
 {
 	ABSOLUTE,
@@ -49,6 +61,9 @@ class World
 	std::vector<std::unique_ptr<Object>> objects;
 	GLuint vao[VAOcnt];
 	Light lights[MAX_LIGHTS];
+	GLuint shadowTextures[MAX_LIGHTS];
+	void replaceLight(Light lNew, GLuint indx);
+
 public:
 	glm::vec3 bgColor;
 	Light ambient;

@@ -28,6 +28,7 @@ void printHelp(void);
 //global variables
 bool axesEnabled=false;
 bool paused=false;
+GLint viewMap = -1;
 double lastTime=0;
 glm::vec3 cameraLOC(0,0,-80);
 Camera c;
@@ -88,6 +89,7 @@ void init(GLFWwindow* window)
 
 	Material canvas = Material::getCanvas();
 	Material silver = Material::getSilver();
+	Material   gold = Material::getGold();
 
 	Light sunlight{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
 	               .specular=glm::vec4{0.5,0.5,0.5,1},
@@ -109,7 +111,7 @@ void init(GLFWwindow* window)
 	            .cutoff=glm::radians(22.5f),.exponent=30,
 	            .enabled=true,.type=LightType::SPOTLIGHT};
 
-	float zOff = 0;
+	float zOff = -0.01;
 	Object* slzp =
 		Object::makeAbsolute(&wld, spot, renderingProgram, 0, silver, 1,
 		                     glm::vec3{       0, zOff, spotOff},
@@ -127,7 +129,7 @@ void init(GLFWwindow* window)
 		                     glm::vec3{-spotOff, zOff, 0},
 		                     glm::vec3{0,1,0}, 0, 0.75f);
 	Object* sun =
-		Object::makeAbsolute(&wld, sunm, renderingProgram, sunTexture, canvas, 1,
+		Object::makeAbsolute(&wld, sunm, renderingProgram, 0, gold, 1,
 		                     glm::vec3{-64,0,-64},
 		                     glm::vec3{0.1f,1,0}, 15, 0.6f);
 	Object* ringHab =
@@ -235,17 +237,29 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 	{
 		c = Camera();
 		c.setPos(cameraLOC);
-		printf("Pressed key  R: Camera reset\n");
+		printf("Pressed key    R: Camera reset\n");
 	}
 	else if(key == GLFW_KEY_P && action == GLFW_PRESS)
 	{
 		paused = !paused;
-		printf("Pressed key  P: Time %s\n",(paused?"Paused":"Unpaused"));
+		printf("Pressed key    P: Time %s\n",(paused?"Paused":"Unpaused"));
 	}
 	else if(key == GLFW_KEY_SPACE && action == GLFW_PRESS)
 	{
 		axesEnabled = !axesEnabled;
-		printf("Pressed key SP: Toggled World axes to %s\n", (axesEnabled?"on":"off"));
+		printf("Pressed key   SP: Toggled World axes to %s\n", (axesEnabled?"on":"off"));
+	}
+	else if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+	{
+		printf("Pressed key  ESC: %sendering\n", (viewMap==-1?"Already r":"R"));
+		viewMap=-1;
+	}
+	else if(key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_9 &&
+	        (mods & GLFW_MOD_CONTROL) && action == GLFW_PRESS)
+	{
+		int newMap =(key-GLFW_KEY_KP_0);
+		printf("Pressed key  ^%d: Viewing shadow map for light %d\n", newMap, newMap);
+		viewMap=(GLint)newMap;
 	}
 }
 
@@ -268,7 +282,7 @@ void printHelp(void)
 		" ^Q:  Quit program(^W also works)\n"
 		"  R:  Reset camera to original position ((0,0,30), looking a the origin)\n"
 		"  P:  Toggle Pause time(default: off)\n"
-		" SP:  Use space bar to toggle axes(default: off)\n"
+		" SP:  Use space bar to toggle axes and other debug info(default: off)\n"
 		"W/S:  Forward/Backward\n"
 		"A/D:  Strafe left/Strafe right\n"
 		"Q/E:  Up/Down\n"
@@ -276,5 +290,7 @@ void printHelp(void)
 		"</>:  Use Left/Right arrow keys to pan Left/Right\n"
 		" \\/:  Use down arrow key to pitch down\n"
 		"[/]:  Use the open and close brackets to roll Left/Right\n"
+		"ESC:  Return to normal rendering mode\n"
+		" ^#:  Where # is a number 0-9 inclusive on the keypad.  See the shadow map for light #\n"
 	);
 }
