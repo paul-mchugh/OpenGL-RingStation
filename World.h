@@ -60,6 +60,7 @@ class World
 	static const int MAX_LIGHTS = 10;
 	std::vector<std::unique_ptr<Object>> objects;
 	GLuint vao[VAOcnt];
+	GLuint framebuffer;
 	Light lights[MAX_LIGHTS];
 	GLuint shadowTextures[MAX_LIGHTS];
 	void replaceLight(Light lNew, GLuint indx);
@@ -70,8 +71,9 @@ public:
 	Light directional;
 	void init();
 	void draw(std::stack<glm::mat4> mst);
-	void update(double timePassed);
 	void relight();
+	void buildShadowBuffers(GLint viewMap);
+	void update(double timePassed);
 	void glTransferLights(glm::mat4 vMat, GLuint shader, std::string name);
 	void drawLightVecs(glm::mat4 pMat, glm::mat4 vMat);
 };
@@ -82,7 +84,7 @@ class Object
 private:
 	World* w;
 	Model m;
-	GLuint shader;
+	ShaderPair shader;
 	GLuint texture;
 	Material mat;
 	GLuint vbo[5];
@@ -113,30 +115,33 @@ private:
 	double rotRate;
 	double rotProgress;
 	std::size_t id;
-	Object(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
+	Object(World* w, Model m, ShaderPair shader, GLuint texture, Material mat, double scale,
 	       glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress);
 public:
 	~Object();
 	static Object*
-	makeOrbiter(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
+	makeOrbiter(World* w, Model m, ShaderPair shader, GLuint texture, Material mat, double scale,
 				double orbitPeriod, double revProgress,
 	            double incline, double intercept, double dist,
 	            glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress);
 	static Object*
-	makeAbsolute(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
+	makeAbsolute(World* w, Model m, ShaderPair shader, GLuint texture, Material mat, double scale,
 	             glm::vec3 pos,
 	             glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress);
 	static Object*
-	makeRelative(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
+	makeRelative(World* w, Model m, ShaderPair shader, GLuint texture, Material mat, double scale,
 	             glm::vec3 rPos,
 	             glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress);
 	bool addChild(Object& child);
 	bool attachLight(Light& light);
 	void setLightEnabled(bool en);
 	bool getLightEnabled();
-	void draw(std::stack<glm::mat4>& mstack);
+	template<void (Object::*action)(std::stack<glm::mat4>& mstack)>
+	void walk(std::stack<glm::mat4>& mstack);
+	void drawAction(std::stack<glm::mat4>& mstack);
+	void relightAction(std::stack<glm::mat4>& mstack);
+	void shadowAction(std::stack<glm::mat4>& mstack);
 	void updatePos(double timePassed);
-	void relight(std::stack<glm::mat4>& mstack);
 };
 
 #endif

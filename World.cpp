@@ -14,6 +14,7 @@ void World::init()
 		lights[i]={.enabled=false,.type=LightType::NO_LIGHT};
 		shadowTextures[i]=0;
 	}
+//	glGenFramebuffers(1,&framebuffer);
 	ambient={.ambient=glm::vec4{0.1,0.1,0.1,1},.enabled=true,.type=LightType::AMBIENT};
 	lights[0]=ambient;
 	directional={.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
@@ -36,17 +37,11 @@ void World::draw(std::stack<glm::mat4> mst)
 		{
 			//add translation for the absolute positioning
 			mst.push(mst.top()*glm::translate(glm::mat4{1.0f}, obj->p.a.pos));
-			obj->draw(mst);
+			obj->walk<&Object::drawAction>(mst);
 			//remove translation for the absolute positioning
 			mst.pop();
 		}
 	}
-}
-
-void World::update(double timePassed)
-{
-	for(int i=0;i<objects.size();++i)
-		objects[i]->updatePos(timePassed);
 }
 
 void World::relight()
@@ -62,11 +57,32 @@ void World::relight()
 		{
 			//add translation for the absolute positioning
 			mst.push(mst.top()*glm::translate(glm::mat4{1.0f}, obj->p.a.pos));
-			obj->relight(mst);
+			obj->walk<&Object::relightAction>(mst);
 			//remove translation for the absolute positioning
 			mst.pop();
 		}
 	}
+}
+
+void World::buildShadowBuffers(int viewMap)
+{
+	for(GLint i=0;i<MAX_LIGHTS;++i)
+	{
+		Light l = lights[i];
+		//no shadows for empth light slots, ambient lights, or disabled lights
+		if(l.type==LightType::NO_LIGHT||l.type==LightType::AMBIENT||!l.enabled)
+			continue;
+		else if(l.type==LightType::DIRECTIONAL||l.type==LightType::SPOTLIGHT)
+		{
+			//glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);
+		}
+	}
+}
+
+void World::update(double timePassed)
+{
+	for(int i=0;i<objects.size();++i)
+		objects[i]->updatePos(timePassed);
 }
 
 void World::replaceLight(Light lNew, GLuint indx)
@@ -181,7 +197,7 @@ Object::~Object()
 }
 
 Object::
-	Object(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
+	Object(World* w, Model m, ShaderPair shader, GLuint texture, Material mat, double scale,
 	       glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress)
 {
 	//initialize vars
@@ -224,7 +240,7 @@ Object::
 
 Object*
 Object::
-	makeOrbiter(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
+	makeOrbiter(World* w, Model m, ShaderPair shader, GLuint texture, Material mat, double scale,
 	            double orbitPeriod, double revProgress,
 	            double incline, double intercept, double dist,
 	            glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress)
@@ -250,7 +266,7 @@ Object::
 
 Object*
 Object::
-	makeAbsolute(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
+	makeAbsolute(World* w, Model m, ShaderPair shader, GLuint texture, Material mat, double scale,
 	             glm::vec3 pos,
 	             glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress)
 {
@@ -266,7 +282,7 @@ Object::
 
 Object*
 Object::
-	makeRelative(World* w, Model m, GLuint shader, GLuint texture, Material mat, double scale,
+	makeRelative(World* w, Model m, ShaderPair shader, GLuint texture, Material mat, double scale,
 	             glm::vec3 rPos,
 	             glm::vec3 axisOfRot, double rotationPeriod, double rotationProgress)
 {
@@ -321,7 +337,8 @@ void Object::setLightEnabled(bool en)
 }
 bool Object::getLightEnabled(){ return lightIndx!=-1 && w->lights[lightIndx].enabled; }
 
-void Object::draw(std::stack<glm::mat4>& mstack)
+template<void (Object::*action)(std::stack<glm::mat4>& mstack)>
+void Object::walk(std::stack<glm::mat4>& mstack)
 {
 	//account for scale
 	mstack.push(mstack.top()*glm::scale<float>(glm::mat4{1.0f},glm::vec3{scale,scale,scale}));
@@ -333,8 +350,49 @@ void Object::draw(std::stack<glm::mat4>& mstack)
 
 	mstack.push(mstack.top()*rotation);
 
+	//perform the node action draw/relight
+	(this->*action)(mstack);
+
+	//undo accounting for scale and rotation
+	mstack.pop();
+	mstack.pop();
+
+	//Draw children
+	for (std::size_t indx : children)
+	{
+		Object& child = *this->w->objects[indx];
+		//if the child is relatively positioned put the rotation back
+		//and translate by the relative position
+		if(child.posType==PosType::RELATIVE)
+		{
+			mstack.push(mstack.top()*rotation*glm::translate(glm::mat4{1.0f},(float)scale*child.p.r.rPos));
+		}
+		else if(child.posType==PosType::ORBITING)
+		{
+			glm::mat4 revolution{1.0f};
+			//rotate around the axis of revolution
+			revolution *= glm::rotate<float>(glm::mat4{1.0f}, child.p.o.revProgress*2*glm::pi<float>(),
+			                                 child.p.o.axisOfRevolution);
+			glm::vec3 planetPos{child.p.o.orbitDist,0,0};
+			planetPos =
+				glm::vec3(glm::rotate<float>(glm::mat4{1.0f}, child.p.o.ecIntercept,
+			                             glm::vec3{0,1,0}) * glm::vec4{planetPos,1});
+			planetPos = glm::vec3(revolution * glm::vec4(planetPos,1));
+
+			mstack.push(mstack.top()*glm::translate(glm::mat4(1.0f),planetPos));
+		}
+		child.walk<action>(mstack);
+		//remove the top matrix whether it cam from the relative or orbiting properties
+		if(child.posType==PosType::RELATIVE||child.posType==PosType::ORBITING)
+			mstack.pop();
+	}
+}
+
+void Object::drawAction(std::stack<glm::mat4>& mstack)
+{
+	GLuint rShader = shader.renderProgram;
 	//Draw self
-	glUseProgram(shader);
+	glUseProgram(rShader);
 	glBindVertexArray(w->vao[0]);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
@@ -350,16 +408,16 @@ void Object::draw(std::stack<glm::mat4>& mstack)
 	glEnableVertexAttribArray(3);
 
 	//send the uniforms to the GPU
-	GLuint mvHandle = glGetUniformLocation(shader, "mv_matrix");
+	GLuint mvHandle = glGetUniformLocation(rShader, "mv_matrix");
 	glUniformMatrix4fv(mvHandle,   1, GL_FALSE, glm::value_ptr(mstack.top()));
-	GLuint normHandle = glGetUniformLocation(shader, "norm_matrix");
+	GLuint normHandle = glGetUniformLocation(rShader, "norm_matrix");
 	glm::mat4 normMat = glm::transpose(glm::inverse(mstack.top()));
 	glUniformMatrix4fv(normHandle, 1, GL_FALSE, glm::value_ptr(normMat));
-	GLuint texEnHandle = glGetUniformLocation(shader, "texEn");
-	glProgramUniform1i(shader, texEnHandle, texture!=0);
-	GLuint atLightHandle = glGetUniformLocation(shader, "atLight");
-	glProgramUniform1i(shader, atLightHandle, lightIndx);
-	mat.glTransfer(shader, "material");
+	GLuint texEnHandle = glGetUniformLocation(rShader, "texEn");
+	glProgramUniform1i(rShader, texEnHandle, texture!=0);
+	GLuint atLightHandle = glGetUniformLocation(rShader, "atLight");
+	glProgramUniform1i(rShader, atLightHandle, lightIndx);
+	mat.glTransfer(rShader, "material");
 
 	//send the texture to the GPU
 	if(texture!=0)
@@ -374,40 +432,20 @@ void Object::draw(std::stack<glm::mat4>& mstack)
 	glDepthFunc(GL_LEQUAL);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[4]);
 	glDrawElements(GL_TRIANGLES, m.getNumIndices(), GL_UNSIGNED_INT, 0);
+}
 
-	//undo accounting for scale and rotation
-	mstack.pop();
-	mstack.pop();
-
-	//Draw children
-	for (std::size_t indx : children)
+void Object::relightAction(std::stack<glm::mat4>& mstack)
+{
+	//compute light position if this is a lighted object
+	if(lightIndx!=-1)
 	{
-		Object& child = *this->w->objects[indx];
-		//if the child is relatively positioned put the rotation back
-		//and translate by the relative position
-		if(child.posType==PosType::RELATIVE)
-		{
-			mstack.push(mstack.top()*rotation*glm::translate(glm::mat4{1.0f},(float)scale*child.p.r.rPos));
-		}
-		else if(child.posType==PosType::ORBITING)
-		{
-			glm::mat4 revolution{1.0f};
-			//rotate around the axis of revolution
-			revolution *= glm::rotate<float>(glm::mat4{1.0f}, child.p.o.revProgress*2*glm::pi<float>(),
-			                                 child.p.o.axisOfRevolution);
-			glm::vec3 planetPos{child.p.o.orbitDist,0,0};
-			planetPos =
-				glm::vec3(glm::rotate<float>(glm::mat4{1.0f}, child.p.o.ecIntercept,
-			                             glm::vec3{0,1,0}) * glm::vec4{planetPos,1});
-			planetPos = glm::vec3(revolution * glm::vec4(planetPos,1));
-
-			mstack.push(mstack.top()*glm::translate(glm::mat4(1.0f),planetPos));
-		}
-		child.draw(mstack);
-		//remove the top matrix whether it cam from the relative or orbiting properties
-		if(child.posType==PosType::RELATIVE||child.posType==PosType::ORBITING)
-			mstack.pop();
+		w->lights[lightIndx].position = glm::vec3{mstack.top() * glm::vec4{0,0,0,1}};
 	}
+}
+
+void Object::shadowAction(std::stack<glm::mat4>& mstack)
+{
+
 }
 
 void Object::updatePos(double timePassed)
@@ -417,55 +455,3 @@ void Object::updatePos(double timePassed)
 	rotProgress = fmod(rotProgress +   rotRate*timePassed,1);
 }
 
-void Object::relight(std::stack<glm::mat4>& mstack)
-{
-	//account for scale
-	mstack.push(mstack.top()*glm::scale<float>(glm::mat4{1.0f},glm::vec3{scale,scale,scale}));
-
-	//account for rotation
-	glm::mat4 rotation{1.0f};
-	glm::vec3& arot=axisOfRotation;
-	rotation *= glm::rotate<float>(glm::mat4{1.0f}, rotProgress*2*glm::pi<float>(), arot);
-
-	mstack.push(mstack.top()*rotation);
-
-	//compute light position if this is a lighted object
-	if(lightIndx!=-1)
-	{
-		w->lights[lightIndx].position = glm::vec3{mstack.top() * glm::vec4{0,0,0,1}};
-	}
-
-	//undo accounting for scale and rotation
-	mstack.pop();
-	mstack.pop();
-
-	//Draw children
-	for (std::size_t indx : children)
-	{
-		Object& child = *this->w->objects[indx];
-		//if the child is relatively positioned put the rotation back
-		//and translate by the relative position
-		if(child.posType==PosType::RELATIVE)
-		{
-			mstack.push(mstack.top()*rotation*glm::translate(glm::mat4{1.0f},(float)scale*child.p.r.rPos));
-		}
-		else if(child.posType==PosType::ORBITING)
-		{
-			glm::mat4 revolution{1.0f};
-			//rotate around the axis of revolution
-			revolution *= glm::rotate<float>(glm::mat4{1.0f}, child.p.o.revProgress*2*glm::pi<float>(),
-			                                 child.p.o.axisOfRevolution);
-			glm::vec3 planetPos{child.p.o.orbitDist,0,0};
-			planetPos =
-				glm::vec3(glm::rotate<float>(glm::mat4{1.0f}, child.p.o.ecIntercept,
-			                             glm::vec3{0,1,0}) * glm::vec4{planetPos,1});
-			planetPos = glm::vec3(revolution * glm::vec4(planetPos,1));
-
-			mstack.push(mstack.top()*glm::translate(glm::mat4(1.0f),planetPos));
-		}
-		child.relight(mstack);
-		//remove the top matrix whether it cam from the relative or orbiting properties
-		if(child.posType==PosType::RELATIVE||child.posType==PosType::ORBITING)
-			mstack.pop();
-	}
-}

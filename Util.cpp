@@ -293,3 +293,13 @@ void LineDrawer::draw(glm::mat4 p, glm::mat4 v, glm::vec3 src, glm::vec3 dst, gl
 	glLineWidth(5);
 	glDrawArrays(GL_LINES,0,2);
 }
+
+
+ShaderPair::ShaderPair(GLuint rProgram) : ShaderPair{rProgram,rProgram} {};
+ShaderPair::ShaderPair(GLuint rProgram, GLuint sProgram) :
+	renderProgram{rProgram}, shadowProgram{sProgram} {};
+ShaderPair::operator bool() const
+{
+	return renderProgram || shadowProgram;
+}
+

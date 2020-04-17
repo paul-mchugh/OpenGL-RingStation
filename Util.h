@@ -52,10 +52,13 @@ public:
 	static void draw(glm::mat4 p, glm::mat4 v, glm::vec3 src, glm::vec3 dst, glm::vec3 color);
 };
 
-class ShaderPair
+struct ShaderPair
 {
 	GLuint renderProgram;
 	GLuint shadowProgram;
+	ShaderPair(GLuint rProgram=0);
+	ShaderPair(GLuint rProgram, GLuint sProgram);
+	operator bool() const;
 };
 
 #endif

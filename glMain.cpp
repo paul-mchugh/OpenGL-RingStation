@@ -14,7 +14,7 @@
 const float rotateMagnitude = 30;
 const float moveMagnitude = 10;
 const float spotOff = 5;
-GLuint renderingProgram;
+ShaderPair renderingPrograms;
 
 //forward declarations
 void init(GLFWwindow* window);
@@ -60,8 +60,10 @@ int main()
 
 void init(GLFWwindow* window)
 {
-	renderingProgram = Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl");
-	if(!renderingProgram) std::cout << "Could not Load shader" << std::endl;
+	renderingPrograms =
+		ShaderPair{Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl")};//,
+//		           Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl")};
+	if(!renderingPrograms) printf("Could not Load shader\n");
 	glfwSetKeyCallback(window, key_callback);
 	glfwSetScrollCallback(window, scroll_callback);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -111,33 +113,33 @@ void init(GLFWwindow* window)
 	            .cutoff=glm::radians(22.5f),.exponent=30,
 	            .enabled=true,.type=LightType::SPOTLIGHT};
 
-	float zOff = -0.01;
+	float zOff = -0.1;
 	Object* slzp =
-		Object::makeAbsolute(&wld, spot, renderingProgram, 0, silver, 1,
+		Object::makeAbsolute(&wld, spot, renderingPrograms, 0, silver, 1,
 		                     glm::vec3{       0, zOff, spotOff},
 		                     glm::vec3{0,1,0}, 0, 0.0f);
 	Object* slzm =
-		Object::makeAbsolute(&wld, spot, renderingProgram, 0, silver, 1,
+		Object::makeAbsolute(&wld, spot, renderingPrograms, 0, silver, 1,
 		                     glm::vec3{       0, zOff,-spotOff},
 		                     glm::vec3{0,1,0}, 0, 0.25f);
 	Object* slxp =
-		Object::makeAbsolute(&wld, spot, renderingProgram, 0, silver, 1,
+		Object::makeAbsolute(&wld, spot, renderingPrograms, 0, silver, 1,
 		                     glm::vec3{ spotOff, zOff, 0},
 		                     glm::vec3{0,1,0}, 0, 0.5f);
 	Object* slxm =
-		Object::makeAbsolute(&wld, spot, renderingProgram, 0, silver, 1,
+		Object::makeAbsolute(&wld, spot, renderingPrograms, 0, silver, 1,
 		                     glm::vec3{-spotOff, zOff, 0},
 		                     glm::vec3{0,1,0}, 0, 0.75f);
 	Object* sun =
-		Object::makeAbsolute(&wld, sunm, renderingProgram, 0, gold, 1,
+		Object::makeAbsolute(&wld, sunm, renderingPrograms, 0, gold, 1,
 		                     glm::vec3{-64,0,-64},
 		                     glm::vec3{0.1f,1,0}, 15, 0.6f);
 	Object* ringHab =
-		Object::makeAbsolute(&wld, rh, renderingProgram, ringWldTexture, canvas, 100,
+		Object::makeAbsolute(&wld, rh, renderingPrograms, ringWldTexture, canvas, 100,
 		                     glm::vec3{0,0,0},
 		                     glm::vec3{0,1,0}, 60, 0);
 	Object* shuttle =
-		Object::makeRelative(&wld, shu, renderingProgram, shuttleTexture, canvas, 1,
+		Object::makeRelative(&wld, shu, renderingPrograms, shuttleTexture, canvas, 1,
 		                     glm::vec3{ 0,0,0.95},
 		                     glm::vec3{-1,0,0   }, 10, 0.25);
 
@@ -172,20 +174,27 @@ void display(GLFWwindow* window, double currentTime)
 	vMat = c.getTransform();
 	glm::mat4 invvMat = glm::transpose(glm::inverse(vMat));
 
-	//relight now that we have a view matrix
+	//relight computes the actual positions of all the lights(not just relative positions)
+	wld.relight();
+	wld.buildShadowBuffers(viewMap);
+
+	//send the uniforms to the GPU
+	//glBindFramebuffer(GL_FRAMEBUFFER,0);
+	glUseProgram(renderingPrograms.renderProgram);
+	GLuint projHandleR = glGetUniformLocation(renderingPrograms.renderProgram, "proj_matrix");
+	glUniformMatrix4fv(projHandleR, 1, GL_FALSE, glm::value_ptr(pMat));
+	GLuint invvHandleR = glGetUniformLocation(renderingPrograms.renderProgram, "invv_matrix");
+	glUniformMatrix4fv(invvHandleR, 1, GL_FALSE, glm::value_ptr(invvMat));
+	//GLuint projHandleS = glGetUniformLocation(renderingPrograms.shadowProgram, "proj_matrix");
+	//glUniformMatrix4fv(projHandleS, 1, GL_FALSE, glm::value_ptr(pMat));
+	//GLuint invvHandleS = glGetUniformLocation(renderingPrograms.shadowProgram, "invv_matrix");
+	//glUniformMatrix4fv(invvHandleS, 1, GL_FALSE, glm::value_ptr(invvMat));
+	wld.glTransferLights(vMat, renderingPrograms.renderProgram, "lights");
+	//wld.glTransferLights(vMat, renderingPrograms.shadowProgram, "lights");
+
 	std::stack<glm::mat4> mst;
 	mst.push(glm::mat4(1.0f));
 	mst.push(mst.top()*vMat);
-	wld.relight();
-
-	//send the uniforms to the GPU
-	glUseProgram(renderingProgram);
-	GLuint projHandle = glGetUniformLocation(renderingProgram, "proj_matrix");
-	glUniformMatrix4fv(projHandle, 1, GL_FALSE, glm::value_ptr(pMat));
-	GLuint invvHandle = glGetUniformLocation(renderingProgram, "invv_matrix");
-	glUniformMatrix4fv(invvHandle, 1, GL_FALSE, glm::value_ptr(invvMat));
-	wld.glTransferLights(vMat, renderingProgram, "lights");
-
 	wld.draw(mst);
 
 	if(axesEnabled)
