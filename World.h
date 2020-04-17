@@ -62,6 +62,7 @@ class World
 	GLuint vao[VAOcnt];
 	GLuint framebuffer;
 	Light lights[MAX_LIGHTS];
+	glm::mat4 vpMat[MAX_LIGHTS];
 	GLuint shadowTextures[MAX_LIGHTS];
 	void replaceLight(Light lNew, GLuint indx);
 

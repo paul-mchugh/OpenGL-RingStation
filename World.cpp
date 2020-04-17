@@ -14,13 +14,13 @@ void World::init()
 		lights[i]={.enabled=false,.type=LightType::NO_LIGHT};
 		shadowTextures[i]=0;
 	}
-//	glGenFramebuffers(1,&framebuffer);
+	glGenFramebuffers(1,&framebuffer);
 	ambient={.ambient=glm::vec4{0.1,0.1,0.1,1},.enabled=true,.type=LightType::AMBIENT};
-	lights[0]=ambient;
+	replaceLight(ambient,0);
 	directional={.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
 	             .specular=glm::vec4{1,1,1,1},.direction=glm::vec3{0,0,1},
 	             .enabled=true,.type=LightType::DIRECTIONAL};
-	lights[1]=directional;
+	replaceLight(directional,1);
 }
 
 void World::draw(std::stack<glm::mat4> mst)
@@ -74,9 +74,66 @@ void World::buildShadowBuffers(int viewMap)
 			continue;
 		else if(l.type==LightType::DIRECTIONAL||l.type==LightType::SPOTLIGHT)
 		{
-			//glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);
+			//switch to the shadow framebuffer and connect it to the shadow texture
+			glBindFramebuffer(GL_FRAMEBUFFER,viewMap!=i?framebuffer:0);
+			if(viewMap!=i)
+				glFramebufferTexture(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,shadowTextures[i],0);
+			//drawing setting depends on if we are debugging this texture, depth on
+			glDrawBuffer(viewMap==i?GL_FRONT:GL_NONE);
+			glEnable(GL_DEPTH_TEST);
+			//clean out the old color and depth buffer
+			glClear(GL_DEPTH_BUFFER_BIT);
+		    glClearColor(bgColor.x,bgColor.y,bgColor.z,1.0);
+			glClear(GL_COLOR_BUFFER_BIT);
+
+			//setup the matrices
+			glm::mat4 pMat, vMat;
+			if(l.type==LightType::DIRECTIONAL)
+			{
+				GLfloat hShadRes=shadRes/10.0f;
+				pMat = glm::ortho(-hShadRes,hShadRes,-hShadRes,hShadRes,-hShadRes,hShadRes);
+				vMat = glm::lookAt(glm::normalize(l.direction)*-100.0f,
+				                   glm::vec3{0},glm::vec3{0,1,0});
+			}
+			else if(l.type==LightType::SPOTLIGHT)
+			{
+				pMat = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+				vMat = glm::lookAt(l.position,l.position+l.direction,glm::vec3{0,1,0});
+			}
+			vpMat[i]=pMat*vMat;
+
+			//setup matrix stack and start walking the world
+			std::stack<glm::mat4> mst;
+			mst.push(glm::mat4{1});
+//			mst.push(mst.top()*pMat);
+			mst.push(mst.top()*vMat);
+
+	glUseProgram(objects[0]->shader.shadowProgram);
+	GLuint projHandleR = glGetUniformLocation(objects[0]->shader.shadowProgram, "proj_matrix");
+	glUniformMatrix4fv(projHandleR, 1, GL_FALSE, glm::value_ptr(pMat));
+	GLuint invvHandleR = glGetUniformLocation(objects[0]->shader.shadowProgram, "invv_matrix");
+	glUniformMatrix4fv(invvHandleR, 1, GL_FALSE,
+		glm::value_ptr(glm::transpose(glm::inverse(vMat))));
+	glTransferLights(vMat, objects[0]->shader.shadowProgram, "lights");
+
+			//draw absolutely positioned objects
+			for(int o=0;o<objects.size();++o)
+			{
+				std::unique_ptr<Object>& obj = objects[o];
+				if (obj->posType == PosType::ABSOLUTE)
+				{
+					//add translation for the absolute positioning
+					mst.push(mst.top()*glm::translate(glm::mat4{1.0f}, obj->p.a.pos));
+					obj->walk<&Object::shadowAction>(mst);
+					//remove translation for the absolute positioning
+					mst.pop();
+				}
+			}
+	if(Util::checkOpenGLError())
+		printf("Error in sbdraw\n");
 		}
 	}
+	if(Util::checkOpenGLError())printf("Error in sb\n");
 }
 
 void World::update(double timePassed)
@@ -141,7 +198,7 @@ void World::glTransferLights(glm::mat4 vMat, GLuint shader, std::string name)
 	ambient.type=LightType::AMBIENT;
 	directional.type=LightType::DIRECTIONAL;
 	replaceLight(ambient,0);
-	replaceLight(directional,0);
+	replaceLight(directional,1);
 
 	for(GLuint i=0; i<World::MAX_LIGHTS; ++i)
 	{
@@ -321,8 +378,11 @@ bool Object::attachLight(Light& light)
 	if(lightIndx==-1)
 		for(int i=0;i<World::MAX_LIGHTS;++i)
 			if(w->lights[i].type==LightType::NO_LIGHT)
+			{
 				lightIndx=i;
-			else if(i==World::MAX_LIGHTS-i)
+				break;
+			}
+			else if(i==World::MAX_LIGHTS-1)
 				return false;
 
 	//copy light return true
@@ -445,7 +505,48 @@ void Object::relightAction(std::stack<glm::mat4>& mstack)
 
 void Object::shadowAction(std::stack<glm::mat4>& mstack)
 {
+	GLuint rShader = shader.shadowProgram;
+	//Draw self
+	glUseProgram(rShader);
+	glBindVertexArray(w->vao[0]);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(1);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(2);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo[3]);
+	glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(3);
 
+	//send the uniforms to the GPU
+	GLuint mvHandle = glGetUniformLocation(rShader, "mv_matrix");
+	glUniformMatrix4fv(mvHandle,   1, GL_FALSE, glm::value_ptr(mstack.top()));
+	GLuint normHandle = glGetUniformLocation(rShader, "norm_matrix");
+	glm::mat4 normMat = glm::transpose(glm::inverse(mstack.top()));
+	glUniformMatrix4fv(normHandle, 1, GL_FALSE, glm::value_ptr(normMat));
+	GLuint texEnHandle = glGetUniformLocation(rShader, "texEn");
+	glProgramUniform1i(rShader, texEnHandle, texture!=0);
+	GLuint atLightHandle = glGetUniformLocation(rShader, "atLight");
+	glProgramUniform1i(rShader, atLightHandle, lightIndx);
+	mat.glTransfer(rShader, "material");
+
+	//send the texture to the GPU
+	if(texture!=0)
+	{
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, texture);
+	}
+
+	glEnable(GL_CULL_FACE);
+	glFrontFace(GL_CCW);
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[4]);
+	glDrawElements(GL_TRIANGLES, m.getNumIndices(), GL_UNSIGNED_INT, 0);
 }
 
 void Object::updatePos(double timePassed)

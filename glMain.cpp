@@ -61,8 +61,8 @@ int main()
 void init(GLFWwindow* window)
 {
 	renderingPrograms =
-		ShaderPair{Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl")};//,
-//		           Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl")};
+		ShaderPair{Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl"),
+		           Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl")};
 	if(!renderingPrograms) printf("Could not Load shader\n");
 	glfwSetKeyCallback(window, key_callback);
 	glfwSetScrollCallback(window, scroll_callback);
@@ -151,8 +151,11 @@ void init(GLFWwindow* window)
 
 	ringHab->addChild(*shuttle);
 
+
 	Util::printGLInfo();
 	printHelp();
+	Util::checkOpenGLError();
+	printf("init end\n");
 }
 
 void display(GLFWwindow* window, double currentTime)
@@ -178,18 +181,22 @@ void display(GLFWwindow* window, double currentTime)
 	wld.relight();
 	wld.buildShadowBuffers(viewMap);
 
+	//restore program to state for rendering after running shadow programs
+	if(viewMap==-1)glBindFramebuffer(GL_FRAMEBUFFER,0);
+	glDrawBuffer(viewMap==-1?GL_FRONT:GL_NONE);
+
 	//send the uniforms to the GPU
-	//glBindFramebuffer(GL_FRAMEBUFFER,0);
 	glUseProgram(renderingPrograms.renderProgram);
 	GLuint projHandleR = glGetUniformLocation(renderingPrograms.renderProgram, "proj_matrix");
 	glUniformMatrix4fv(projHandleR, 1, GL_FALSE, glm::value_ptr(pMat));
 	GLuint invvHandleR = glGetUniformLocation(renderingPrograms.renderProgram, "invv_matrix");
 	glUniformMatrix4fv(invvHandleR, 1, GL_FALSE, glm::value_ptr(invvMat));
+	wld.glTransferLights(vMat, renderingPrograms.renderProgram, "lights");
+
 	//GLuint projHandleS = glGetUniformLocation(renderingPrograms.shadowProgram, "proj_matrix");
 	//glUniformMatrix4fv(projHandleS, 1, GL_FALSE, glm::value_ptr(pMat));
 	//GLuint invvHandleS = glGetUniformLocation(renderingPrograms.shadowProgram, "invv_matrix");
 	//glUniformMatrix4fv(invvHandleS, 1, GL_FALSE, glm::value_ptr(invvMat));
-	wld.glTransferLights(vMat, renderingPrograms.renderProgram, "lights");
 	//wld.glTransferLights(vMat, renderingPrograms.shadowProgram, "lights");
 
 	std::stack<glm::mat4> mst;
@@ -205,6 +212,7 @@ void display(GLFWwindow* window, double currentTime)
 		LineDrawer::draw(pMat, vMat, glm::vec3(0,0,0), glm::vec3(0,0,9), glm::vec3(0,0,1));
 		wld.drawLightVecs(pMat, vMat);
 	}
+	Util::checkOpenGLError();
 }
 
 #define GK(key) (glfwGetKey(window,GLFW_KEY_ ## key ) == GLFW_PRESS)
@@ -246,21 +254,21 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 	{
 		c = Camera();
 		c.setPos(cameraLOC);
-		printf("Pressed key    R: Camera reset\n");
+		printf("Pressed key   R: Camera reset\n");
 	}
 	else if(key == GLFW_KEY_P && action == GLFW_PRESS)
 	{
 		paused = !paused;
-		printf("Pressed key    P: Time %s\n",(paused?"Paused":"Unpaused"));
+		printf("Pressed key   P: Time %s\n",(paused?"Paused":"Unpaused"));
 	}
 	else if(key == GLFW_KEY_SPACE && action == GLFW_PRESS)
 	{
 		axesEnabled = !axesEnabled;
-		printf("Pressed key   SP: Toggled World axes to %s\n", (axesEnabled?"on":"off"));
+		printf("Pressed key  SP: Toggled World axes to %s\n", (axesEnabled?"on":"off"));
 	}
 	else if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 	{
-		printf("Pressed key  ESC: %sendering\n", (viewMap==-1?"Already r":"R"));
+		printf("Pressed key ESC: %sendering\n", (viewMap==-1?"Already r":"R"));
 		viewMap=-1;
 	}
 	else if(key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_9 &&
