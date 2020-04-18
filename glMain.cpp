@@ -62,7 +62,7 @@ void init(GLFWwindow* window)
 {
 	renderingPrograms =
 		ShaderPair{Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl"),
-		           Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl")};
+		           Util::createShaderProgram("shadVertShader.glsl", "shadFragShader.glsl")};
 	if(!renderingPrograms) printf("Could not Load shader\n");
 	glfwSetKeyCallback(window, key_callback);
 	glfwSetScrollCallback(window, scroll_callback);
@@ -144,10 +144,10 @@ void init(GLFWwindow* window)
 		                     glm::vec3{-1,0,0   }, 10, 0.25);
 
 	sun->attachLight(sunlight);
-	slzp->attachLight(sllzp);
-	slzm->attachLight(sllzm);
 	slxp->attachLight(sllxp);
+	slzm->attachLight(sllzm);
 	slxm->attachLight(sllxm);
+	slzp->attachLight(sllzp);
 
 	ringHab->addChild(*shuttle);
 
@@ -179,11 +179,16 @@ void display(GLFWwindow* window, double currentTime)
 
 	//relight computes the actual positions of all the lights(not just relative positions)
 	wld.relight();
+	glEnable(GL_POLYGON_OFFSET_FILL);
+	glPolygonOffset(2.0f,4.0f);
 	wld.buildShadowBuffers(viewMap);
+	glDisable(GL_POLYGON_OFFSET_FILL);
+
 
 	//restore program to state for rendering after running shadow programs
 	if(viewMap==-1)glBindFramebuffer(GL_FRAMEBUFFER,0);
 	glDrawBuffer(viewMap==-1?GL_FRONT:GL_NONE);
+	if(viewMap==-1)glViewport(0,0,width,height);
 
 	//send the uniforms to the GPU
 	glUseProgram(renderingPrograms.renderProgram);
@@ -193,16 +198,7 @@ void display(GLFWwindow* window, double currentTime)
 	glUniformMatrix4fv(invvHandleR, 1, GL_FALSE, glm::value_ptr(invvMat));
 	wld.glTransferLights(vMat, renderingPrograms.renderProgram, "lights");
 
-	//GLuint projHandleS = glGetUniformLocation(renderingPrograms.shadowProgram, "proj_matrix");
-	//glUniformMatrix4fv(projHandleS, 1, GL_FALSE, glm::value_ptr(pMat));
-	//GLuint invvHandleS = glGetUniformLocation(renderingPrograms.shadowProgram, "invv_matrix");
-	//glUniformMatrix4fv(invvHandleS, 1, GL_FALSE, glm::value_ptr(invvMat));
-	//wld.glTransferLights(vMat, renderingPrograms.shadowProgram, "lights");
-
-	std::stack<glm::mat4> mst;
-	mst.push(glm::mat4(1.0f));
-	mst.push(mst.top()*vMat);
-	wld.draw(mst);
+	wld.draw(vMat);
 
 	if(axesEnabled)
 	{

@@ -42,11 +42,15 @@ uniform mat4 invv_matrix;
 uniform mat4 proj_matrix;
 uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D samp;
+uniform mat4 shadMVP[MAX_LIGHTS];
+uniform sampler2DShadow flats[MAX_LIGHTS];
+uniform samplerCubeShadow cubes[MAX_LIGHTS];
 
 out vec2 varyingTc;
 out vec3 varyingNorm;
 out vec3 varyingLightDir[MAX_LIGHTS];
 out vec3 varyingHalfVec [MAX_LIGHTS];
+out vec4 shadowCoord[MAX_LIGHTS];
 out vec3 varyingVPos;
 
 void main(void)
@@ -77,8 +81,9 @@ void main(void)
 			break;
 		}
 		varyingHalfVec[i] = normalize(varyingLightDir[i]) - normalize(varyingVPos);
-
+		shadowCoord[i] = shadMVP[i] * vec4(position,1.0);
 	}
+//	gl_Position= shadowCoord[1];
 
 	//pass the texture coordinates
 	varyingTc = tc;

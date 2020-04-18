@@ -6,6 +6,21 @@
 #include <cmath>
 #include <utility>
 
+//consts
+const glm::mat4 B=
+	glm::scale(glm::translate(glm::mat4{1.0f},glm::vec3{0.5}), glm::vec3{0.5});
+/*{
+0.5f,0.0f,0.0f,0.0f,
+0.0f,0.5f,0.0f,0.0f,
+0.0f,0.0f,0.5f,0.0f,
+0.5f,0.5f,0.5f,1.0f,
+};*/
+const GLuint tuOff = 10;
+
+//dirty hack global var
+GLint currentShadowLight=-1;
+glm::mat4 drawvMat;
+
 void World::init()
 {
 	glGenVertexArrays(VAOcnt, vao);
@@ -23,11 +38,16 @@ void World::init()
 	replaceLight(directional,1);
 }
 
-void World::draw(std::stack<glm::mat4> mst)
+void World::draw(glm::mat4 vMat)
 {
 	glClear(GL_DEPTH_BUFFER_BIT);
 	glClearColor(bgColor.x,bgColor.y,bgColor.z,1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
+
+	drawvMat=vMat;
+
+	std::stack<glm::mat4> mst;
+	mst.push(glm::mat4{1});
 
 	//draw absolutely positioned objects
 	for(int i=0;i<objects.size();++i)
@@ -78,6 +98,7 @@ void World::buildShadowBuffers(int viewMap)
 			glBindFramebuffer(GL_FRAMEBUFFER,viewMap!=i?framebuffer:0);
 			if(viewMap!=i)
 				glFramebufferTexture(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,shadowTextures[i],0);
+			if(viewMap!=i)glViewport(0,0,shadRes,shadRes);
 			//drawing setting depends on if we are debugging this texture, depth on
 			glDrawBuffer(viewMap==i?GL_FRONT:GL_NONE);
 			glEnable(GL_DEPTH_TEST);
@@ -92,7 +113,7 @@ void World::buildShadowBuffers(int viewMap)
 			{
 				GLfloat hShadRes=shadRes/10.0f;
 				pMat = glm::ortho(-hShadRes,hShadRes,-hShadRes,hShadRes,-hShadRes,hShadRes);
-				vMat = glm::lookAt(glm::normalize(l.direction)*-100.0f,
+				vMat = glm::lookAt(glm::normalize(-l.direction)*hShadRes,
 				                   glm::vec3{0},glm::vec3{0,1,0});
 			}
 			else if(l.type==LightType::SPOTLIGHT)
@@ -100,21 +121,12 @@ void World::buildShadowBuffers(int viewMap)
 				pMat = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
 				vMat = glm::lookAt(l.position,l.position+l.direction,glm::vec3{0,1,0});
 			}
-			vpMat[i]=pMat*vMat;
+			vpMats[i]=pMat*vMat;
+			currentShadowLight=i;
 
 			//setup matrix stack and start walking the world
 			std::stack<glm::mat4> mst;
 			mst.push(glm::mat4{1});
-//			mst.push(mst.top()*pMat);
-			mst.push(mst.top()*vMat);
-
-	glUseProgram(objects[0]->shader.shadowProgram);
-	GLuint projHandleR = glGetUniformLocation(objects[0]->shader.shadowProgram, "proj_matrix");
-	glUniformMatrix4fv(projHandleR, 1, GL_FALSE, glm::value_ptr(pMat));
-	GLuint invvHandleR = glGetUniformLocation(objects[0]->shader.shadowProgram, "invv_matrix");
-	glUniformMatrix4fv(invvHandleR, 1, GL_FALSE,
-		glm::value_ptr(glm::transpose(glm::inverse(vMat))));
-	glTransferLights(vMat, objects[0]->shader.shadowProgram, "lights");
 
 			//draw absolutely positioned objects
 			for(int o=0;o<objects.size();++o)
@@ -129,11 +141,8 @@ void World::buildShadowBuffers(int viewMap)
 					mst.pop();
 				}
 			}
-	if(Util::checkOpenGLError())
-		printf("Error in sbdraw\n");
 		}
 	}
-	if(Util::checkOpenGLError())printf("Error in sb\n");
 }
 
 void World::update(double timePassed)
@@ -203,6 +212,42 @@ void World::glTransferLights(glm::mat4 vMat, GLuint shader, std::string name)
 	for(GLuint i=0; i<World::MAX_LIGHTS; ++i)
 	{
 		lights[i].glTransfer(vMat, shader, name, i);
+	}
+
+	const GLuint flatDisabled = 8;
+	const GLuint cubeDisabled = 9;
+	//transfer the shadow textures
+	for(GLuint i=0; i<World::MAX_LIGHTS; ++i)
+	{
+		Light l = lights[i];
+		if(l.type==LightType::NO_LIGHT||l.type==LightType::AMBIENT)
+			continue;
+		else if(l.type==LightType::DIRECTIONAL||l.type==LightType::SPOTLIGHT)
+		{
+			//set the samplers to the appropriate TUs
+			GLuint flatSamp =
+				glGetUniformLocation(shader, ("flats["+std::to_string(i)+"]").c_str());
+			GLuint cubeSamp =
+				glGetUniformLocation(shader, ("cubes["+std::to_string(i)+"]").c_str());
+			glUniform1i(flatSamp, tuOff+i);
+			glUniform1i(cubeSamp, cubeDisabled);
+
+			glActiveTexture(GL_TEXTURE0+i+tuOff);
+        	glBindTexture(GL_TEXTURE_2D, shadowTextures[i]);
+
+		}
+		else if(l.type==LightType::POSITIONAL)
+		{
+			GLuint flatSamp =
+				glGetUniformLocation(shader, ("flats["+std::to_string(i)+"]").c_str());
+			GLuint cubeSamp =
+				glGetUniformLocation(shader, ("cubes["+std::to_string(i)+"]").c_str());
+			glUniform1i(flatSamp, flatDisabled);
+			glUniform1i(cubeSamp, tuOff+i);
+
+			glActiveTexture(GL_TEXTURE0+i+tuOff);
+        	glBindTexture(GL_TEXTURE_CUBE_MAP, shadowTextures[i]);
+		}
 	}
 }
 
@@ -467,17 +512,33 @@ void Object::drawAction(std::stack<glm::mat4>& mstack)
 	glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 0, 0);
 	glEnableVertexAttribArray(3);
 
+
+	glm::mat4 mvMat= drawvMat * mstack.top();
 	//send the uniforms to the GPU
 	GLuint mvHandle = glGetUniformLocation(rShader, "mv_matrix");
-	glUniformMatrix4fv(mvHandle,   1, GL_FALSE, glm::value_ptr(mstack.top()));
+	glUniformMatrix4fv(mvHandle,   1, GL_FALSE, glm::value_ptr(mvMat));
 	GLuint normHandle = glGetUniformLocation(rShader, "norm_matrix");
-	glm::mat4 normMat = glm::transpose(glm::inverse(mstack.top()));
+	glm::mat4 normMat = glm::transpose(glm::inverse(mvMat));
 	glUniformMatrix4fv(normHandle, 1, GL_FALSE, glm::value_ptr(normMat));
 	GLuint texEnHandle = glGetUniformLocation(rShader, "texEn");
 	glProgramUniform1i(rShader, texEnHandle, texture!=0);
 	GLuint atLightHandle = glGetUniformLocation(rShader, "atLight");
 	glProgramUniform1i(rShader, atLightHandle, lightIndx);
 	mat.glTransfer(rShader, "material");
+	//calculate and send the shadow MVP matrices to the GPU
+	for(int i=0; i<World::MAX_LIGHTS; ++i)
+	{
+		//calculate aspect ratio correction factor
+		GLfloat res[4];
+		glGetFloatv(GL_VIEWPORT, res);
+		glm::mat4 arcf = glm::scale(glm::mat4{1.0f}, glm::vec3{res[3]/shadRes,res[4]/shadRes,1});
+		glm::mat4 shadMVP = B * w->vpMats[i] * mstack.top();
+
+		GLuint shadMVPLOC =
+			glGetUniformLocation(rShader,("shadMVP["+std::to_string(i)+"]").c_str());
+
+		glUniformMatrix4fv(shadMVPLOC, 1, GL_FALSE, glm::value_ptr(shadMVP));
+	}
 
 	//send the texture to the GPU
 	if(texture!=0)
@@ -505,9 +566,9 @@ void Object::relightAction(std::stack<glm::mat4>& mstack)
 
 void Object::shadowAction(std::stack<glm::mat4>& mstack)
 {
-	GLuint rShader = shader.shadowProgram;
+	GLuint sShader = shader.shadowProgram;
 	//Draw self
-	glUseProgram(rShader);
+	glUseProgram(sShader);
 	glBindVertexArray(w->vao[0]);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
@@ -515,24 +576,14 @@ void Object::shadowAction(std::stack<glm::mat4>& mstack)
 	glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
 	glEnableVertexAttribArray(1);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
-	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glEnableVertexAttribArray(2);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[3]);
-	glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glEnableVertexAttribArray(3);
+
+
+	//compute model coords of texture
+	glm::mat4 mvp = w->vpMats[currentShadowLight] * mstack.top();
 
 	//send the uniforms to the GPU
-	GLuint mvHandle = glGetUniformLocation(rShader, "mv_matrix");
-	glUniformMatrix4fv(mvHandle,   1, GL_FALSE, glm::value_ptr(mstack.top()));
-	GLuint normHandle = glGetUniformLocation(rShader, "norm_matrix");
-	glm::mat4 normMat = glm::transpose(glm::inverse(mstack.top()));
-	glUniformMatrix4fv(normHandle, 1, GL_FALSE, glm::value_ptr(normMat));
-	GLuint texEnHandle = glGetUniformLocation(rShader, "texEn");
-	glProgramUniform1i(rShader, texEnHandle, texture!=0);
-	GLuint atLightHandle = glGetUniformLocation(rShader, "atLight");
-	glProgramUniform1i(rShader, atLightHandle, lightIndx);
-	mat.glTransfer(rShader, "material");
+	GLuint mvpHandle = glGetUniformLocation(sShader, "mvp_matrix");
+	glUniformMatrix4fv(mvpHandle,   1, GL_FALSE, glm::value_ptr(mvp));
 
 	//send the texture to the GPU
 	if(texture!=0)

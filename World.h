@@ -62,7 +62,7 @@ class World
 	GLuint vao[VAOcnt];
 	GLuint framebuffer;
 	Light lights[MAX_LIGHTS];
-	glm::mat4 vpMat[MAX_LIGHTS];
+	glm::mat4 vpMats[MAX_LIGHTS];
 	GLuint shadowTextures[MAX_LIGHTS];
 	void replaceLight(Light lNew, GLuint indx);
 
@@ -71,7 +71,7 @@ public:
 	Light ambient;
 	Light directional;
 	void init();
-	void draw(std::stack<glm::mat4> mst);
+	void draw(glm::mat4 vMat);
 	void relight();
 	void buildShadowBuffers(GLint viewMap);
 	void update(double timePassed);

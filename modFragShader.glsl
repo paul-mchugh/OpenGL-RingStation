@@ -1,6 +1,7 @@
 #version 430
 
 #define MAX_LIGHTS  10
+#define SHAD_TEX    10
 #define NO_LIGHT    0
 #define AMBIENT     1
 #define POSITIONAL  2
@@ -41,11 +42,15 @@ uniform mat4 invv_matrix;
 uniform mat4 proj_matrix;
 uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D samp;
+uniform mat4 shadMVP[MAX_LIGHTS];
+uniform sampler2DShadow flats[MAX_LIGHTS];
+uniform samplerCubeShadow cubes[MAX_LIGHTS];
 
 in vec2 varyingTc;
 in vec3 varyingNorm;
 in vec3 varyingLightDir[MAX_LIGHTS];
 in vec3 varyingHalfVec [MAX_LIGHTS];
+in vec4 shadowCoord[MAX_LIGHTS];
 in vec3 varyingVPos;
 
 out vec4 color;
@@ -70,12 +75,14 @@ void main(void)
 			{
 				vec3 L = normalize(varyingLightDir[i]);
 				float diffFactor = 1, specFactor = 1;
+				float shadFactor = textureProj(flats[i], shadowCoord[i]);
 				if(l.type==POSITIONAL)
 				{
 					float dist = length(l.position-varyingVPos);
 					float adjDist = max(dist-KD,0);
 					diffFactor = 1/(KC+adjDist*KL+adjDist*adjDist*KQ);
 					specFactor = 1/(KC+dist*KL+dist*dist*KQ);
+					//shadFactor = textureProj(cubes[i], shadowCoord[i]);
 				}
 				else if(l.type==SPOTLIGHT)
 				{
@@ -85,13 +92,15 @@ void main(void)
 					diffFactor=(cfMin<offAxisCosPhi)?pow(offAxisCosPhi,l.exponent):0;
 					specFactor=diffFactor;
 				}
+				else if(l.type==DIRECTIONAL);
+				//apply shadows
+				diffFactor*=shadFactor;
+				specFactor*=shadFactor;
 				//diffuse contribution
 				float cosTheta = dot(L,N);
 				if(i==atLight)cosTheta=1;
 				diffWSum += l.diffuse.xyz * max(cosTheta,0.0)*diffFactor;
 				//specular contribution
-				//vec3 R = normalize(reflect(-L,N));
-				//float cosPhi = dot(V,R);
 				vec3 H = normalize(varyingHalfVec[i]);
 				float cosPhi = dot(H,N);
 				specWSum += l.specular.xyz * pow(max(cosPhi,0.0), material.shininess*3)*specFactor;
@@ -103,5 +112,6 @@ void main(void)
 		diffWSum   * material.diffuse.xyz+
 		specWSum   * material.specular.xyz;
 	color = vec4(lightV,1) * (texEn ? texture(samp,varyingTc) : vec4(1));
+//	color = vec4(textureProj(flats[1], vec4(varyingTc, 0.55,1)), varyingTc.x,varyingTc.y,1);
 }
 
