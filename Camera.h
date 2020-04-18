@@ -18,6 +18,8 @@ public:
 	void pan(float radians);
 	void pitch(float radians);
 	void roll(float radians);
+	glm::vec3 getPos();
+	glm::vec3 getDir();
 };
 
 #endif

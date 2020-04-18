@@ -19,7 +19,16 @@ const GLuint cubemapFaces[] =
 	GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
 	GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
 };
-const GLsizei shadRes=1024;//all opengl GPUs are guaranteed to support 1024x1024 textures
+const glm::vec3 faceDirv[] =
+{
+	glm::vec3{ 1, 0, 0},
+	glm::vec3{-1, 0, 0},
+	glm::vec3{ 0, 1, 0},
+	glm::vec3{ 0,-1, 0},
+	glm::vec3{ 0, 0, 1},
+	glm::vec3{ 0, 0,-1}
+};
+const GLsizei shadRes=2048;//all opengl GPUs are guaranteed to support 1024x1024 textures
 
 enum class PosType
 {
@@ -61,6 +70,8 @@ class World
 	std::vector<std::unique_ptr<Object>> objects;
 	GLuint vao[VAOcnt];
 	GLuint framebuffer;
+	GLuint sinkCM;
+	GLuint sinkFM;
 	Light lights[MAX_LIGHTS];
 	glm::mat4 vpMats[MAX_LIGHTS];
 	GLuint shadowTextures[MAX_LIGHTS];
@@ -73,7 +84,7 @@ public:
 	void init();
 	void draw(glm::mat4 vMat);
 	void relight();
-	void buildShadowBuffers(GLint viewMap);
+	void buildShadowBuffers(GLint viewMap, GLint viewFace);
 	void update(double timePassed);
 	void glTransferLights(glm::mat4 vMat, GLuint shader, std::string name);
 	void drawLightVecs(glm::mat4 pMat, glm::mat4 vMat);
@@ -143,6 +154,7 @@ public:
 	void relightAction(std::stack<glm::mat4>& mstack);
 	void shadowAction(std::stack<glm::mat4>& mstack);
 	void updatePos(double timePassed);
+	void overrideAbsPos(glm::vec3 newPos);
 };
 
 #endif

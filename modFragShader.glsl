@@ -11,6 +11,7 @@
 #define KC 1
 #define KL 0
 #define KQ 0.000125
+#define SWIDTH 0.25
 
 struct Light
 {
@@ -55,6 +56,24 @@ in vec3 varyingVPos;
 
 out vec4 color;
 
+float lookup(int i, float ox, float oy)
+{
+	return
+		textureProj(flats[i], shadowCoord[i] +
+		            vec4(ox*0.001*shadowCoord[i].w,oy*0.001*shadowCoord[i].w,-0.01,0.0));
+}
+
+float computeShadowForLight(int i)
+{
+	float f=0;
+	vec2 offset = mod(floor(gl_FragCoord.xy),2.0)*SWIDTH;
+	f+=lookup(i, -1.5*SWIDTH+offset.x,  1.5*SWIDTH-offset.y);
+	f+=lookup(i, -1.5*SWIDTH+offset.x, -0.5*SWIDTH-offset.y);
+	f+=lookup(i,  0.5*SWIDTH+offset.x,  1.5*SWIDTH-offset.y);
+	f+=lookup(i,  0.5*SWIDTH+offset.x, -0.5*SWIDTH-offset.y);
+	return f/4.0;
+}
+
 void main(void)
 {
 	//compute norm and pos
@@ -75,14 +94,14 @@ void main(void)
 			{
 				vec3 L = normalize(varyingLightDir[i]);
 				float diffFactor = 1, specFactor = 1;
-				float shadFactor = textureProj(flats[i], shadowCoord[i]);
+				float shadFactor = computeShadowForLight(i);
 				if(l.type==POSITIONAL)
 				{
 					float dist = length(l.position-varyingVPos);
 					float adjDist = max(dist-KD,0);
 					diffFactor = 1/(KC+adjDist*KL+adjDist*adjDist*KQ);
 					specFactor = 1/(KC+dist*KL+dist*dist*KQ);
-					//shadFactor = textureProj(cubes[i], shadowCoord[i]);
+					shadFactor = 1;//texture(cubes[i], L).r; positional light not working
 				}
 				else if(l.type==SPOTLIGHT)
 				{

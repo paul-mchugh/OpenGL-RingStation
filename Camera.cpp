@@ -53,3 +53,7 @@ void Camera::roll(float radians)
 	U = glm::vec3{rollM * glm::vec4{U,1}};
 	V = glm::vec3{rollM * glm::vec4{V,1}};
 }
+
+glm::vec3 Camera::getPos(){ return C; }
+
+glm::vec3 Camera::getDir(){ return N; }

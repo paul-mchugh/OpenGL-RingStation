@@ -20,8 +20,10 @@ ShaderPair renderingPrograms;
 void init(GLFWwindow* window);
 void display(GLFWwindow* window, double currentTime);
 void handleKeys(GLFWwindow* window, double time);
+void handleUserLight();
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void scroll_callback(GLFWwindow* window, double xScrOff, double yScrOff);
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void printHelp(void);
 
@@ -29,17 +31,26 @@ void printHelp(void);
 bool axesEnabled=false;
 bool paused=false;
 GLint viewMap = -1;
+GLint viewFace = 0;
 double lastTime=0;
-glm::vec3 cameraLOC(0,0,-80);
+glm::vec3 initialCameraLOC(-90.21,21.44,-19.81);
+float initialPitch=-25.0f;
+float initialPan=-50.0f;
+glm::vec3 initialLightLOC(-55.23,23.74,-41.60);
+glm::vec3 initialLightDIR(-0.49,-0.59,-0.64);
 Camera c;
 World wld;
+//movable light
+Object* iLight;
+bool grabbedLight=false;
+Light userlight;
 
 int main()
 {
 	if(!glfwInit()) exit(1);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	GLFWwindow* window = glfwCreateWindow(600, 600, "CSC155: HW3", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(800, 800, "CSC155: HW3", NULL, NULL);
 	glfwMakeContextCurrent(window);
 	if(glewInit() != GLEW_OK) exit(1);
 	glfwSwapInterval(1);
@@ -66,12 +77,15 @@ void init(GLFWwindow* window)
 	if(!renderingPrograms) printf("Could not Load shader\n");
 	glfwSetKeyCallback(window, key_callback);
 	glfwSetScrollCallback(window, scroll_callback);
+	glfwSetMouseButtonCallback(window, mouse_button_callback);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
 	wld.init();
 
 	//setup camera
-	c.setPos(cameraLOC);
+	c.setPos(initialCameraLOC);
+	c.pan(glm::radians(initialPan));
+	c.pitch(glm::radians(initialPitch));
 
 	//model data
 	GLuint sunTexture     = Util::loadTexture("img/sun_euv.png");
@@ -93,9 +107,10 @@ void init(GLFWwindow* window)
 	Material silver = Material::getSilver();
 	Material   gold = Material::getGold();
 
-	Light sunlight{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
-	               .specular=glm::vec4{0.5,0.5,0.5,1},
-	               .enabled=true,.type=LightType::POSITIONAL};
+	userlight ={.ambient=glm::vec4{0.05,0.05,0.05,1}, .diffuse=glm::vec4{1,1,1,1},
+	            .specular=glm::vec4{0.8,0.8,0.8,1},.direction=initialLightDIR,
+	            .cutoff=glm::radians(35.0f),.exponent=30,
+	            .enabled=true,.type=LightType::SPOTLIGHT};
 	Light sllzp{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
 	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{ 0,0, 1,1},
 	            .cutoff=glm::radians(22.5f),.exponent=30,
@@ -130,24 +145,29 @@ void init(GLFWwindow* window)
 		Object::makeAbsolute(&wld, spot, renderingPrograms, 0, silver, 1,
 		                     glm::vec3{-spotOff, zOff, 0},
 		                     glm::vec3{0,1,0}, 0, 0.75f);
-	Object* sun =
+	iLight =
 		Object::makeAbsolute(&wld, sunm, renderingPrograms, 0, gold, 1,
-		                     glm::vec3{-64,0,-64},
+		                     initialLightLOC,
 		                     glm::vec3{0.1f,1,0}, 15, 0.6f);
 	Object* ringHab =
 		Object::makeAbsolute(&wld, rh, renderingPrograms, ringWldTexture, canvas, 100,
 		                     glm::vec3{0,0,0},
 		                     glm::vec3{0,1,0}, 60, 0);
 	Object* shuttle =
-		Object::makeRelative(&wld, shu, renderingPrograms, shuttleTexture, canvas, 1,
-		                     glm::vec3{ 0,0,0.95},
+		Object::makeAbsolute(&wld, shu, renderingPrograms, shuttleTexture, canvas, 2,
+		                     glm::vec3{-65.99,5.63,-60.51},
 		                     glm::vec3{-1,0,0   }, 10, 0.25);
 
-	sun->attachLight(sunlight);
+	iLight->attachLight(userlight);
 	slxp->attachLight(sllxp);
 	slzm->attachLight(sllzm);
 	slxm->attachLight(sllxm);
 	slzp->attachLight(sllzp);
+
+	wld.directional={.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
+	                 .specular=glm::vec4{1,1,1,1},.direction=glm::vec3{1,-0.15,1.25},
+	                 .enabled=true,.type=LightType::DIRECTIONAL};
+	wld.ambient={.ambient=glm::vec4{0.2,0.2,0.2,1},.enabled=true,.type=LightType::AMBIENT};
 
 	ringHab->addChild(*shuttle);
 
@@ -155,7 +175,6 @@ void init(GLFWwindow* window)
 	Util::printGLInfo();
 	printHelp();
 	Util::checkOpenGLError();
-	printf("init end\n");
 }
 
 void display(GLFWwindow* window, double currentTime)
@@ -163,6 +182,7 @@ void display(GLFWwindow* window, double currentTime)
 	double timeDiff=currentTime-lastTime;
 	//handle keyboard input
 	handleKeys(window, timeDiff);
+	handleUserLight();
 	//update the objects and relight
 	if(!paused)
 		wld.update(timeDiff);
@@ -180,8 +200,8 @@ void display(GLFWwindow* window, double currentTime)
 	//relight computes the actual positions of all the lights(not just relative positions)
 	wld.relight();
 	glEnable(GL_POLYGON_OFFSET_FILL);
-	glPolygonOffset(2.0f,4.0f);
-	wld.buildShadowBuffers(viewMap);
+	glPolygonOffset(5.0f,5.0f);
+	wld.buildShadowBuffers(viewMap, viewFace);
 	glDisable(GL_POLYGON_OFFSET_FILL);
 
 
@@ -231,6 +251,16 @@ void handleKeys(GLFWwindow* window, double time)
 
 #undef GK
 
+void handleUserLight()
+{
+	if(grabbedLight)
+	{
+		userlight.direction=-c.getDir();
+		iLight->attachLight(userlight);
+		iLight->overrideAbsPos(c.getPos()+glm::normalize(userlight.direction));
+	}
+}
+
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	//these keys are special and deserve a callback
@@ -249,13 +279,21 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 	else if(key == GLFW_KEY_R && action == GLFW_PRESS)
 	{
 		c = Camera();
-		c.setPos(cameraLOC);
+		c.setPos(initialCameraLOC);
+		c.pan(glm::radians(-50.2f));
+		c.pitch(glm::radians(-25.0f));
 		printf("Pressed key   R: Camera reset\n");
 	}
 	else if(key == GLFW_KEY_P && action == GLFW_PRESS)
 	{
 		paused = !paused;
 		printf("Pressed key   P: Time %s\n",(paused?"Paused":"Unpaused"));
+	}
+	else if(key == GLFW_KEY_T && action == GLFW_PRESS)
+	{
+		userlight.enabled= !userlight.enabled;
+		iLight->attachLight(userlight);
+		printf("Pressed key   T: Light toggled %s\n",(userlight.enabled?"On":"Off"));
 	}
 	else if(key == GLFW_KEY_SPACE && action == GLFW_PRESS)
 	{
@@ -270,15 +308,41 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 	else if(key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_9 &&
 	        (mods & GLFW_MOD_CONTROL) && action == GLFW_PRESS)
 	{
-		int newMap =(key-GLFW_KEY_KP_0);
+		int newMap = (key-GLFW_KEY_KP_0);
 		printf("Pressed key  ^%d: Viewing shadow map for light %d\n", newMap, newMap);
 		viewMap=(GLint)newMap;
+		viewFace=0;
+	}
+	else if(key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_5 &&
+	        (mods & GLFW_MOD_ALT) && action == GLFW_PRESS)
+	{
+		int newFace = (key-GLFW_KEY_KP_0);
+		printf("Pressed key M-%d: Viewing shadow map for light %d, face %d\n",
+		       newFace, viewMap, newFace);
+		viewFace=(GLint)newFace;
 	}
 }
 
 void scroll_callback(GLFWwindow* window, double xScrOff, double yScrOff)
 {
 	//do nothing for now
+}
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+	{
+		grabbedLight=!grabbedLight;
+		if(grabbedLight)
+			printf("Grabbed Light\n");
+		else
+		{
+			glm::vec3 dir = glm::normalize(c.getDir());
+			glm::vec3 pos = c.getPos()+ dir;
+			printf("Dropped Light at pos:(%.2f,%.2f,%.2f), dir:(%.2f,%.2f,%.2f)\n",
+			       pos.x,pos.y,pos.z,dir.x,dir.y,dir.z);
+		}
+	}
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -290,11 +354,13 @@ void printHelp(void)
 {
 	printf(
 		"Usage:\n"
+		"Note: M- means ALT\n"
 		"Press any of the following keys while the window is selected\n"
 		"  ?:  View this help message in console(F1 also works)\n"
 		" ^Q:  Quit program(^W also works)\n"
 		"  R:  Reset camera to original position ((0,0,30), looking a the origin)\n"
 		"  P:  Toggle Pause time(default: off)\n"
+		"  T:  Toggle the user light on/off(default: on)\n"
 		" SP:  Use space bar to toggle axes and other debug info(default: off)\n"
 		"W/S:  Forward/Backward\n"
 		"A/D:  Strafe left/Strafe right\n"
@@ -305,5 +371,6 @@ void printHelp(void)
 		"[/]:  Use the open and close brackets to roll Left/Right\n"
 		"ESC:  Return to normal rendering mode\n"
 		" ^#:  Where # is a number 0-9 inclusive on the keypad.  See the shadow map for light #\n"
+		"M-#:  Where # is a number 0-5 inclusive on the keypad.  Selects face # for positionals\n"
 	);
 }

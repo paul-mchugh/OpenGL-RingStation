@@ -15,6 +15,9 @@ const glm::mat4 B=
 0.0f,0.0f,0.5f,0.0f,
 0.5f,0.5f,0.5f,1.0f,
 };*/
+
+const GLuint flatDisabled = 8;
+const GLuint cubeDisabled = 9;
 const GLuint tuOff = 10;
 
 //dirty hack global var
@@ -36,6 +39,38 @@ void World::init()
 	             .specular=glm::vec4{1,1,1,1},.direction=glm::vec3{0,0,1},
 	             .enabled=true,.type=LightType::DIRECTIONAL};
 	replaceLight(directional,1);
+
+	//create a cubemap for all the disabled cubes to access
+	glGenTextures(1, &sinkCM);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, sinkCM);
+	for(GLuint i = 0; i<6; ++i)
+		glTexImage2D(cubemapFaces[i], 0, GL_DEPTH_COMPONENT, shadRes, shadRes,
+		             0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+	//glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	//and bind it
+	glActiveTexture(GL_TEXTURE0+cubeDisabled);
+   	glBindTexture(GL_TEXTURE_CUBE_MAP, sinkCM);
+
+	//create a 2dmap for all the disabled flats to access
+	glGenTextures(1, &sinkFM);
+	glBindTexture(GL_TEXTURE_2D, sinkFM);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
+	             shadRes, shadRes, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	//and bind it
+	glActiveTexture(GL_TEXTURE0+flatDisabled);
+   	glBindTexture(GL_TEXTURE_2D, sinkFM);
 }
 
 void World::draw(glm::mat4 vMat)
@@ -84,7 +119,7 @@ void World::relight()
 	}
 }
 
-void World::buildShadowBuffers(int viewMap)
+void World::buildShadowBuffers(GLint viewMap, GLint viewFace)
 {
 	for(GLint i=0;i<MAX_LIGHTS;++i)
 	{
@@ -92,53 +127,80 @@ void World::buildShadowBuffers(int viewMap)
 		//no shadows for empth light slots, ambient lights, or disabled lights
 		if(l.type==LightType::NO_LIGHT||l.type==LightType::AMBIENT||!l.enabled)
 			continue;
-		else if(l.type==LightType::DIRECTIONAL||l.type==LightType::SPOTLIGHT)
+		else if(l.type==LightType::DIRECTIONAL||l.type==LightType::SPOTLIGHT||
+		        l.type==LightType::POSITIONAL)
 		{
-			//switch to the shadow framebuffer and connect it to the shadow texture
-			glBindFramebuffer(GL_FRAMEBUFFER,viewMap!=i?framebuffer:0);
-			if(viewMap!=i)
-				glFramebufferTexture(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,shadowTextures[i],0);
-			if(viewMap!=i)glViewport(0,0,shadRes,shadRes);
-			//drawing setting depends on if we are debugging this texture, depth on
-			glDrawBuffer(viewMap==i?GL_FRONT:GL_NONE);
-			glEnable(GL_DEPTH_TEST);
-			//clean out the old color and depth buffer
-			glClear(GL_DEPTH_BUFFER_BIT);
-		    glClearColor(bgColor.x,bgColor.y,bgColor.z,1.0);
-			glClear(GL_COLOR_BUFFER_BIT);
-
-			//setup the matrices
-			glm::mat4 pMat, vMat;
-			if(l.type==LightType::DIRECTIONAL)
+			for(int f=0; f<(l.type==LightType::POSITIONAL?6:1);++f)
 			{
-				GLfloat hShadRes=shadRes/10.0f;
-				pMat = glm::ortho(-hShadRes,hShadRes,-hShadRes,hShadRes,-hShadRes,hShadRes);
-				vMat = glm::lookAt(glm::normalize(-l.direction)*hShadRes,
-				                   glm::vec3{0},glm::vec3{0,1,0});
-			}
-			else if(l.type==LightType::SPOTLIGHT)
-			{
-				pMat = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
-				vMat = glm::lookAt(l.position,l.position+l.direction,glm::vec3{0,1,0});
-			}
-			vpMats[i]=pMat*vMat;
-			currentShadowLight=i;
-
-			//setup matrix stack and start walking the world
-			std::stack<glm::mat4> mst;
-			mst.push(glm::mat4{1});
-
-			//draw absolutely positioned objects
-			for(int o=0;o<objects.size();++o)
-			{
-				std::unique_ptr<Object>& obj = objects[o];
-				if (obj->posType == PosType::ABSOLUTE)
+				bool view = (viewMap==i&&viewFace==f);
+				//switch to the shadow framebuffer and connect it to the shadow texture
+				glBindFramebuffer(GL_FRAMEBUFFER,!view?framebuffer:0);
+				if(!view)
 				{
-					//add translation for the absolute positioning
-					mst.push(mst.top()*glm::translate(glm::mat4{1.0f}, obj->p.a.pos));
-					obj->walk<&Object::shadowAction>(mst);
-					//remove translation for the absolute positioning
-					mst.pop();
+					if(l.type!=LightType::POSITIONAL)
+						glFramebufferTexture(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,
+						                     shadowTextures[i],0);
+					else
+						glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+						                       cubemapFaces[f], shadowTextures[i], 0);
+				}
+				glViewport(0,0,shadRes,shadRes);
+				//drawing setting depends on if we are debugging this texture, depth on
+				glDrawBuffer(view?GL_FRONT:GL_NONE);
+				glEnable(GL_DEPTH_TEST);
+				//clean out the old color and depth buffer
+				glClear(GL_DEPTH_BUFFER_BIT);
+				glClearColor(bgColor.x,bgColor.y,bgColor.z,1.0);
+				glClear(GL_COLOR_BUFFER_BIT);
+
+				//setup the matrices
+				glm::mat4 pMat, vMat;
+				if(l.type==LightType::DIRECTIONAL)
+				{
+					GLfloat hShadRes=shadRes/10.0f;
+					pMat = glm::ortho(-hShadRes,hShadRes,-hShadRes,hShadRes,-hShadRes*2,hShadRes*2);
+					vMat = glm::lookAt(glm::normalize(-l.direction)*hShadRes,
+				                   glm::vec3{0},glm::vec3{0,1,0});
+				}
+				else if(l.type==LightType::SPOTLIGHT)
+				{
+					pMat = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+					vMat = glm::lookAt(l.position,l.position+l.direction,glm::vec3{0,1,0});
+				}
+				else if(l.type==LightType::POSITIONAL)
+				{
+					pMat = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+					switch(cubemapFaces[f])
+					{
+					case GL_TEXTURE_CUBE_MAP_POSITIVE_Y:
+						vMat = glm::lookAt(l.position,l.position+faceDirv[f],glm::vec3{0,0,1});
+						break;
+					case GL_TEXTURE_CUBE_MAP_NEGATIVE_Y:
+						vMat = glm::lookAt(l.position,l.position+faceDirv[f],glm::vec3{0,0,-1});
+						break;
+					default:
+						vMat = glm::lookAt(l.position,l.position+faceDirv[f],glm::vec3{0,-1,0});
+					}
+				}
+				vpMats[i]=pMat*vMat;
+				currentShadowLight=i;
+
+				//setup matrix stack and start walking the world
+				std::stack<glm::mat4> mst;
+				mst.push(glm::mat4{1});
+
+				//draw absolutely positioned objects
+				for(int o=0;o<objects.size();++o)
+				{
+					std::unique_ptr<Object>& obj = objects[o];
+					if (obj->posType == PosType::ABSOLUTE)
+					{
+						//add translation for the absolute positioning
+						mst.push(mst.top()*glm::translate(glm::mat4{1.0f}, obj->p.a.pos));
+						obj->walk<&Object::shadowAction>(mst);
+						//remove translation for the absolute positioning
+						mst.pop();
+					}
 				}
 			}
 		}
@@ -174,10 +236,11 @@ void World::replaceLight(Light lNew, GLuint indx)
 			for(GLuint i = 0; i<6; ++i)
 				glTexImage2D(cubemapFaces[i], 0, GL_DEPTH_COMPONENT, shadRes, shadRes,
 				             0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+//			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_MODE,
+//			                GL_COMPARE_REF_TO_TEXTURE);
+//			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		}
@@ -192,8 +255,8 @@ void World::replaceLight(Light lNew, GLuint indx)
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
-			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		}
 	}
 
@@ -214,8 +277,6 @@ void World::glTransferLights(glm::mat4 vMat, GLuint shader, std::string name)
 		lights[i].glTransfer(vMat, shader, name, i);
 	}
 
-	const GLuint flatDisabled = 8;
-	const GLuint cubeDisabled = 9;
 	//transfer the shadow textures
 	for(GLuint i=0; i<World::MAX_LIGHTS; ++i)
 	{
@@ -607,3 +668,10 @@ void Object::updatePos(double timePassed)
 	rotProgress = fmod(rotProgress +   rotRate*timePassed,1);
 }
 
+void Object::overrideAbsPos(glm::vec3 newPos)
+{
+	if(posType==PosType::ABSOLUTE)
+	{
+		p.a.pos=newPos;
+	}
+}
