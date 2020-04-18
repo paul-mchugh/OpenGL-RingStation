@@ -36,8 +36,8 @@ double lastTime=0;
 glm::vec3 initialCameraLOC(-90.21,21.44,-19.81);
 float initialPitch=-25.0f;
 float initialPan=-50.0f;
-glm::vec3 initialLightLOC(-55.23,23.74,-41.60);
-glm::vec3 initialLightDIR(-0.49,-0.59,-0.64);
+glm::vec3 initialLightLOC(-64.67,13.27,-40.90);
+glm::vec3 initialLightDIR(0.04,0.38,0.92);
 Camera c;
 World wld;
 //movable light
