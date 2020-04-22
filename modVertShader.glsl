@@ -18,6 +18,7 @@ struct Light
 	vec4 diffuse;
 	vec4 specular;
 	vec3 position;
+	vec3 absPosition;
 	vec3 direction;
 	float cutoff;
 	float exponent;
@@ -70,18 +71,22 @@ void main(void)
 		switch(l.type)
 		{
 		case POSITIONAL:
+			varyingLightDir[i] = l.position-varyingVPos;
+			shadowCoord[i] = vec4(vec3(shadMVP[i]*vec4(position,1.0))-l.absPosition,1);
+			break;
 		case SPOTLIGHT:
 			varyingLightDir[i] = l.position-varyingVPos;
-			break;
+			shadowCoord[i] = shadMVP[i] * vec4(position,1.0);
+		break;
 		case DIRECTIONAL:
 			varyingLightDir[i] = (-(invv_matrix*vec4(l.direction,1))).xyz;
+			shadowCoord[i] = shadMVP[i] * vec4(position,1.0);
 			break;
 		case AMBIENT:
 		case NO_LIGHT:
 			break;
 		}
 		varyingHalfVec[i] = normalize(varyingLightDir[i]) - normalize(varyingVPos);
-		shadowCoord[i] = shadMVP[i] * vec4(position,1.0);
 	}
 //	gl_Position= shadowCoord[1];
 

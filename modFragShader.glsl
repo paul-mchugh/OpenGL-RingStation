@@ -19,6 +19,7 @@ struct Light
 	vec4 diffuse;
 	vec4 specular;
 	vec3 position;
+	vec3 absPosition;
 	vec3 direction;
 	float cutoff;
 	float exponent;
@@ -74,6 +75,23 @@ float computeShadowForLight(int i)
 	return f/4.0;
 }
 
+float computeCubeShadow(int i)
+{
+	//formula for depth from:
+	//https://stackoverflow.com/questions/48654578/omnidirectional-lighting-in-opengl-glsl-4-1
+	float n=0.1,f=1000;
+	float ndiff = f-n;
+	float near  = (f+n)/ndiff*0.5+0.5;
+	float far   =-(f*n)/ndiff;
+
+	vec3 L = shadowCoord[i].xyz;
+	vec3 absL = abs(L);
+	float z = max(absL.x,max(absL.y,absL.z));
+	float d = near + far /z;
+
+	return texture(cubes[i], vec4(L,d));
+}
+
 void main(void)
 {
 	//compute norm and pos
@@ -99,9 +117,10 @@ void main(void)
 				{
 					float dist = length(l.position-varyingVPos);
 					float adjDist = max(dist-KD,0);
-					diffFactor = 1/(KC+adjDist*KL+adjDist*adjDist*KQ);
-					specFactor = 1/(KC+dist*KL+dist*dist*KQ);
-					shadFactor = 1;//texture(cubes[i], L).r; positional light not working
+					diffFactor = 1/(KC+adjDist*(KL+adjDist*KQ));
+					specFactor = 1/(KC+   dist*(KL+   dist*KQ));
+//					float depth=(0.1+1000)/max(shadowCoord[i].x,max(shadowCoord[i].y,shadowCoord[i].z));
+					shadFactor = computeCubeShadow(i);
 				}
 				else if(l.type==SPOTLIGHT)
 				{
@@ -131,6 +150,5 @@ void main(void)
 		diffWSum   * material.diffuse.xyz+
 		specWSum   * material.specular.xyz;
 	color = vec4(lightV,1) * (texEn ? texture(samp,varyingTc) : vec4(1));
-//	color = vec4(textureProj(flats[1], vec4(varyingTc, 0.55,1)), varyingTc.x,varyingTc.y,1);
+//	color = normalize(shadowCoord[2]);
 }
-

@@ -49,8 +49,8 @@ void World::init()
 
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	//glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-	//glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	//and bind it
@@ -238,9 +238,9 @@ void World::replaceLight(Light lNew, GLuint indx)
 				             0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
 			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_MODE,
-//			                GL_COMPARE_REF_TO_TEXTURE);
-//			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_MODE,
+			                GL_COMPARE_R_TO_TEXTURE);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		}
@@ -281,15 +281,18 @@ void World::glTransferLights(glm::mat4 vMat, GLuint shader, std::string name)
 	for(GLuint i=0; i<World::MAX_LIGHTS; ++i)
 	{
 		Light l = lights[i];
+		GLuint flatSamp =
+			glGetUniformLocation(shader, ("flats["+std::to_string(i)+"]").c_str());
+		GLuint cubeSamp =
+			glGetUniformLocation(shader, ("cubes["+std::to_string(i)+"]").c_str());
 		if(l.type==LightType::NO_LIGHT||l.type==LightType::AMBIENT)
-			continue;
+		{
+			glUniform1i(flatSamp, flatDisabled);
+			glUniform1i(cubeSamp, cubeDisabled);
+		}
 		else if(l.type==LightType::DIRECTIONAL||l.type==LightType::SPOTLIGHT)
 		{
 			//set the samplers to the appropriate TUs
-			GLuint flatSamp =
-				glGetUniformLocation(shader, ("flats["+std::to_string(i)+"]").c_str());
-			GLuint cubeSamp =
-				glGetUniformLocation(shader, ("cubes["+std::to_string(i)+"]").c_str());
 			glUniform1i(flatSamp, tuOff+i);
 			glUniform1i(cubeSamp, cubeDisabled);
 
@@ -299,10 +302,6 @@ void World::glTransferLights(glm::mat4 vMat, GLuint shader, std::string name)
 		}
 		else if(l.type==LightType::POSITIONAL)
 		{
-			GLuint flatSamp =
-				glGetUniformLocation(shader, ("flats["+std::to_string(i)+"]").c_str());
-			GLuint cubeSamp =
-				glGetUniformLocation(shader, ("cubes["+std::to_string(i)+"]").c_str());
 			glUniform1i(flatSamp, flatDisabled);
 			glUniform1i(cubeSamp, tuOff+i);
 
@@ -330,27 +329,29 @@ void World::drawLightVecs(glm::mat4 pMat, glm::mat4 vMat)
 
 void Light::glTransfer(glm::mat4 vMat, GLuint shader, std::string name, GLuint indx)
 {
-	GLuint ambLOC, diffLOC, specLOC, posLOC, dirLOC, cutLOC, expLOC, enLOC, typeLOC;
+	GLuint ambLOC, diffLOC, specLOC, posLOC, absPosLOC,  dirLOC, cutLOC, expLOC, enLOC, typeLOC;
 	glm::vec3 viewPos = glm::vec3{vMat * glm::vec4{position,1}};
 	std::string fName = name+"["+std::to_string(indx)+"]";
-	ambLOC  = glGetUniformLocation(shader, (fName+".ambient").c_str());
-	diffLOC = glGetUniformLocation(shader, (fName+".diffuse").c_str());
-	specLOC = glGetUniformLocation(shader, (fName+".specular").c_str());
-	posLOC  = glGetUniformLocation(shader, (fName+".position").c_str());
-	dirLOC  = glGetUniformLocation(shader, (fName+".direction").c_str());
-	cutLOC  = glGetUniformLocation(shader, (fName+".cutoff").c_str());
-	expLOC  = glGetUniformLocation(shader, (fName+".exponent").c_str());
-	enLOC   = glGetUniformLocation(shader, (fName+".enabled").c_str());
-	typeLOC = glGetUniformLocation(shader, (fName+".type").c_str());
-	glProgramUniform4fv(shader,  ambLOC, 1, glm::value_ptr(ambient));
-	glProgramUniform4fv(shader, diffLOC, 1, glm::value_ptr(diffuse));
-	glProgramUniform4fv(shader, specLOC, 1, glm::value_ptr(specular));
-	glProgramUniform3fv(shader,  posLOC, 1, glm::value_ptr(viewPos));
-	glProgramUniform3fv(shader,  dirLOC, 1, glm::value_ptr(direction));
-	glProgramUniform1f (shader,  cutLOC, (GLfloat)cutoff);
-	glProgramUniform1f (shader,  expLOC, (GLfloat)exponent);
-	glProgramUniform1ui(shader,   enLOC, (GLuint) enabled);
-	glProgramUniform1ui(shader, typeLOC, (GLuint) type);
+	ambLOC    = glGetUniformLocation(shader, (fName+".ambient").c_str());
+	diffLOC   = glGetUniformLocation(shader, (fName+".diffuse").c_str());
+	specLOC   = glGetUniformLocation(shader, (fName+".specular").c_str());
+	posLOC    = glGetUniformLocation(shader, (fName+".position").c_str());
+	absPosLOC = glGetUniformLocation(shader, (fName+".absPosition").c_str());
+	dirLOC    = glGetUniformLocation(shader, (fName+".direction").c_str());
+	cutLOC    = glGetUniformLocation(shader, (fName+".cutoff").c_str());
+	expLOC    = glGetUniformLocation(shader, (fName+".exponent").c_str());
+	enLOC     = glGetUniformLocation(shader, (fName+".enabled").c_str());
+	typeLOC   = glGetUniformLocation(shader, (fName+".type").c_str());
+	glProgramUniform4fv(shader,    ambLOC, 1, glm::value_ptr(ambient));
+	glProgramUniform4fv(shader,   diffLOC, 1, glm::value_ptr(diffuse));
+	glProgramUniform4fv(shader,   specLOC, 1, glm::value_ptr(specular));
+	glProgramUniform3fv(shader,    posLOC, 1, glm::value_ptr(viewPos));
+	glProgramUniform3fv(shader, absPosLOC, 1, glm::value_ptr(position));
+	glProgramUniform3fv(shader,    dirLOC, 1, glm::value_ptr(direction));
+	glProgramUniform1f (shader,    cutLOC, (GLfloat)cutoff);
+	glProgramUniform1f (shader,    expLOC, (GLfloat)exponent);
+	glProgramUniform1ui(shader,     enLOC, (GLuint) enabled);
+	glProgramUniform1ui(shader,   typeLOC, (GLuint) type);
 }
 
 Object::~Object()
@@ -592,8 +593,9 @@ void Object::drawAction(std::stack<glm::mat4>& mstack)
 		//calculate aspect ratio correction factor
 		GLfloat res[4];
 		glGetFloatv(GL_VIEWPORT, res);
-		glm::mat4 arcf = glm::scale(glm::mat4{1.0f}, glm::vec3{res[3]/shadRes,res[4]/shadRes,1});
-		glm::mat4 shadMVP = B * w->vpMats[i] * mstack.top();
+		glm::mat4 shadMVP = B*w->vpMats[i]*mstack.top();
+		if(w->lights[i].type==LightType::POSITIONAL)
+			shadMVP=mstack.top();
 
 		GLuint shadMVPLOC =
 			glGetUniformLocation(rShader,("shadMVP["+std::to_string(i)+"]").c_str());

@@ -25,6 +25,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 void scroll_callback(GLFWwindow* window, double xScrOff, double yScrOff);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+void DebugCB(GLenum source,GLenum type,GLuint id,GLenum severity,GLsizei length,
+             const GLchar* message, const GLvoid* userParam);
 void printHelp(void);
 
 //global variables
@@ -37,7 +39,7 @@ glm::vec3 initialCameraLOC(-90.21,21.44,-19.81);
 float initialPitch=-25.0f;
 float initialPan=-50.0f;
 glm::vec3 initialLightLOC(-64.67,13.27,-40.90);
-glm::vec3 initialLightDIR(0.04,0.38,0.92);
+glm::vec3 initialLightDIR(-0.04,-0.38,-0.92);
 Camera c;
 World wld;
 //movable light
@@ -54,6 +56,13 @@ int main()
 	glfwMakeContextCurrent(window);
 	if(glewInit() != GLEW_OK) exit(1);
 	glfwSwapInterval(1);
+
+//	glEnable(GL_DEBUG_OUTPUT);
+	//gl debug
+	if(GLEW_ARB_debug_output)
+		glDebugMessageCallbackARB(&DebugCB, NULL);
+	else
+		printf("GLEW could not load ARB_debug_output\n");
 
 	init(window);
 
@@ -110,7 +119,7 @@ void init(GLFWwindow* window)
 	userlight ={.ambient=glm::vec4{0.05,0.05,0.05,1}, .diffuse=glm::vec4{1,1,1,1},
 	            .specular=glm::vec4{0.8,0.8,0.8,1},.direction=initialLightDIR,
 	            .cutoff=glm::radians(35.0f),.exponent=30,
-	            .enabled=true,.type=LightType::SPOTLIGHT};
+	            .enabled=true,.type=LightType::POSITIONAL};
 	Light sllzp{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
 	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{ 0,0, 1,1},
 	            .cutoff=glm::radians(22.5f),.exponent=30,
@@ -174,7 +183,7 @@ void init(GLFWwindow* window)
 
 	Util::printGLInfo();
 	printHelp();
-	Util::checkOpenGLError();
+//	Util::checkOpenGLError();
 }
 
 void display(GLFWwindow* window, double currentTime)
@@ -228,7 +237,7 @@ void display(GLFWwindow* window, double currentTime)
 		LineDrawer::draw(pMat, vMat, glm::vec3(0,0,0), glm::vec3(0,0,9), glm::vec3(0,0,1));
 		wld.drawLightVecs(pMat, vMat);
 	}
-	Util::checkOpenGLError();
+//	Util::checkOpenGLError();
 }
 
 #define GK(key) (glfwGetKey(window,GLFW_KEY_ ## key ) == GLFW_PRESS)
@@ -348,6 +357,12 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
 	glViewport(0, 0, width, height);
+}
+
+void DebugCB(GLenum source,GLenum type,GLuint id,GLenum severity,GLsizei length,
+             const GLchar* message, const GLvoid* userParam)
+{
+	printf("%s\n",message);
 }
 
 void printHelp(void)

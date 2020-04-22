@@ -28,7 +28,7 @@ const glm::vec3 faceDirv[] =
 	glm::vec3{ 0, 0, 1},
 	glm::vec3{ 0, 0,-1}
 };
-const GLsizei shadRes=2048;//all opengl GPUs are guaranteed to support 1024x1024 textures
+const GLsizei shadRes=1024;//all opengl GPUs are guaranteed to support 1024x1024 textures
 
 enum class PosType
 {
