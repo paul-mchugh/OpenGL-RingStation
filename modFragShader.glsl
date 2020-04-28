@@ -9,8 +9,8 @@
 #define SPOTLIGHT   4
 #define KD 10
 #define KC 1
-#define KL 0
-#define KQ 0.000125
+#define KL 0.01
+#define KQ 0.005
 #define SWIDTH 0.25
 
 struct Light
@@ -119,7 +119,6 @@ void main(void)
 					float adjDist = max(dist-KD,0);
 					diffFactor = 1/(KC+adjDist*(KL+adjDist*KQ));
 					specFactor = 1/(KC+   dist*(KL+   dist*KQ));
-//					float depth=(0.1+1000)/max(shadowCoord[i].x,max(shadowCoord[i].y,shadowCoord[i].z));
 					shadFactor = computeCubeShadow(i);
 				}
 				else if(l.type==SPOTLIGHT)
@@ -150,5 +149,4 @@ void main(void)
 		diffWSum   * material.diffuse.xyz+
 		specWSum   * material.specular.xyz;
 	color = vec4(lightV,1) * (texEn ? texture(samp,varyingTc) : vec4(1));
-//	color = normalize(shadowCoord[2]);
 }

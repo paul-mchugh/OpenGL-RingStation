@@ -19,6 +19,7 @@ const glm::mat4 B=
 const GLuint flatDisabled = 8;
 const GLuint cubeDisabled = 9;
 const GLuint tuOff = 10;
+const GLsizei shadRes=1024;//all opengl GPUs are guaranteed to support 1024x1024 textures
 
 //dirty hack global var
 GLint currentShadowLight=-1;
@@ -53,6 +54,7 @@ void World::init()
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 	//and bind it
 	glActiveTexture(GL_TEXTURE0+cubeDisabled);
    	glBindTexture(GL_TEXTURE_CUBE_MAP, sinkCM);
@@ -75,9 +77,9 @@ void World::init()
 
 void World::draw(glm::mat4 vMat)
 {
-	glClear(GL_DEPTH_BUFFER_BIT);
-	glClearColor(bgColor.x,bgColor.y,bgColor.z,1.0);
-	glClear(GL_COLOR_BUFFER_BIT);
+//	glClear(GL_DEPTH_BUFFER_BIT);
+//	glClearColor(bgColor.x,bgColor.y,bgColor.z,1.0);
+//	glClear(GL_COLOR_BUFFER_BIT);
 
 	drawvMat=vMat;
 
@@ -243,6 +245,7 @@ void World::replaceLight(Light lNew, GLuint indx)
 			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 		}
 		else if(lNew.type==LightType::DIRECTIONAL||lNew.type==LightType::SPOTLIGHT)
 		{

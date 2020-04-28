@@ -9,27 +9,6 @@
 #include <stack>
 #include <memory>
 
-//constants
-const GLuint cubemapFaces[] =
-{
-	GL_TEXTURE_CUBE_MAP_POSITIVE_X,
-	GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
-	GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
-	GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
-	GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
-	GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
-};
-const glm::vec3 faceDirv[] =
-{
-	glm::vec3{ 1, 0, 0},
-	glm::vec3{-1, 0, 0},
-	glm::vec3{ 0, 1, 0},
-	glm::vec3{ 0,-1, 0},
-	glm::vec3{ 0, 0, 1},
-	glm::vec3{ 0, 0,-1}
-};
-const GLsizei shadRes=1024;//all opengl GPUs are guaranteed to support 1024x1024 textures
-
 enum class PosType
 {
 	ABSOLUTE,

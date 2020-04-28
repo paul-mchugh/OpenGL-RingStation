@@ -57,7 +57,7 @@ Model Generator::generateRingHab(double habWidth, double wallThick, double wallH
     int&  numIndices = m.numIndices;
 
 	m.numVertices = 16*(prec+1);
-	m.numIndices  = 8*prec*6; // not sure this works
+	m.numIndices  = 8*prec*6;
 
 	//initialize vectors
 	m.vertices  = std::vector<glm::vec3>(m.numVertices);
@@ -196,6 +196,59 @@ Model Generator::generateRingHab(double habWidth, double wallThick, double wallH
 	}
 
 
+
+	return m;
+}
+
+#define PANEL(MM,PM,MP,PP) \
+		PM,MM,MP, \
+		MP,PP,PM
+
+Model Generator::generateBox()
+{
+	Model m;
+
+	//setup convienence variables
+    int& numVertices = m.numVertices;
+    int&  numIndices = m.numIndices;
+    std::vector<GLuint>&    indx = m.indices;
+    std::vector<glm::vec3>& vert = m.vertices;
+    std::vector<glm::vec2>& texc = m.texCoords;
+    std::vector<glm::vec3>& norm = m.normals;
+    std::vector<glm::vec3>& tans = m.tangents;
+
+	numVertices = 8;
+	numIndices  = 36;
+
+	//setup hardcoded vertices
+	vert=std::vector<glm::vec3>
+	{
+		glm::vec3{ 1, 1, 1},
+		glm::vec3{-1, 1, 1},
+		glm::vec3{ 1, 1,-1},
+		glm::vec3{-1, 1,-1},
+		glm::vec3{ 1,-1, 1},
+		glm::vec3{-1,-1, 1},
+		glm::vec3{ 1,-1,-1},
+		glm::vec3{-1,-1,-1}
+	};
+
+	//initialize useless texcoords & normals initialize indices
+	texc = std::vector<glm::vec2>(numVertices);
+	norm = std::vector<glm::vec3>(numVertices);
+	tans = std::vector<glm::vec3>(numVertices);
+	indx = std::vector<GLuint>(numIndices);
+
+	//fill the indices array
+	indx=std::vector<GLuint>
+	{
+		PANEL(3,7,1,5), //left
+		PANEL(6,2,4,0), //right
+		PANEL(2,3,0,1), //top
+		PANEL(7,6,5,4), //bottom
+		PANEL(5,4,1,0), //front
+		PANEL(7,3,6,2), //back
+	};
 
 	return m;
 }

@@ -1,5 +1,6 @@
 
 #include "Util.h"
+#include "Generator.h"
 #include <SOIL2/SOIL2.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <cstdio>
@@ -10,7 +11,12 @@
 
 GLuint LineDrawer::vaoLn[1]={0};
 GLuint LineDrawer::shader=0;
-bool LineDrawer::isInit=false;
+bool   LineDrawer::isInit=false;
+GLuint Skybox::vaoLn[1]={0};
+GLuint Skybox::vbo[2]={0};
+GLuint Skybox::shader=0;
+bool   Skybox::isInit=false;
+Model  Skybox::m;
 
 bool Util::checkOpenGLError()
 {
@@ -210,6 +216,57 @@ GLuint Util::loadTexture(const char* filename)
 	return textureID;
 }
 
+GLuint
+	Util::loadCubemap(const char* xp, const char* xm,
+	                  const char* yp, const char* ym,
+	                  const char* zp, const char* zm)
+{
+	if(!xp|!xm|!yp|!ym|!zp|!zm)
+		return 0;
+
+	const char* ffName[6]={xp,xm,yp,ym,zp,zm};
+
+	//create and bind the cubemap
+	GLuint texID;
+	glGenTextures(1,&texID);
+	if(Util::checkOpenGLError())
+		printf("Error: loading Cubemap\n");
+
+	glBindTexture(GL_TEXTURE_CUBE_MAP, texID);
+
+	//add the cubemap faces
+	for(int f=0;f<6;++f)
+	{
+		int width,height,channels;
+		unsigned char* img =
+			SOIL_load_image(ffName[f], &width, &height, &channels, SOIL_LOAD_AUTO );
+		//if we could not load the image stop and delete the texture
+		if(!img)
+		{
+			glDeleteTextures(1,&texID);
+			printf("Error: loading file %s\n",ffName[f]);
+			return 0;
+		}
+
+		GLint fmt;
+		switch(channels)
+		{
+			case 1: fmt=GL_RED;  break;
+			case 2: fmt=GL_RG;   break;
+			case 3: fmt=GL_RGB;  break;
+			default:
+			case 4: fmt=GL_RGBA; break;
+		}
+		glTexImage2D(cubemapFaces[f], 0, fmt, width, height, 0, fmt,
+		             GL_UNSIGNED_BYTE, ((unsigned char*)img));
+
+		//delete the image data
+		SOIL_free_image_data(img);
+	}
+
+	return texID;
+}
+
 void Util::printGLInfo()
 {
 	const GLubyte* vendorStr	= glGetString(GL_VENDOR);
@@ -292,6 +349,103 @@ void LineDrawer::draw(glm::mat4 p, glm::mat4 v, glm::vec3 src, glm::vec3 dst, gl
 
 	glLineWidth(5);
 	glDrawArrays(GL_LINES,0,2);
+}
+
+Skybox::Skybox(): texture(0) {}
+Skybox::Skybox(std::string path)
+{
+	if(!isInit)
+	{
+		m = Generator::generateBox();
+		glGenVertexArrays(1, vaoLn);
+	    glBindVertexArray(vaoLn[0]);
+		glGenBuffers(2, vbo);
+	    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+		glBufferData(GL_ARRAY_BUFFER, 3*m.getNumVertices()*sizeof(float),
+		             &m.getVertices()[0],GL_STATIC_DRAW);
+	    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[1]);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3*m.getNumIndices()*sizeof(float),
+		             &m.getIndices()[0],GL_STATIC_DRAW);
+		shader = Util::createShaderProgram("skyboxVertShader.glsl", "skyboxFragShader.glsl");
+		if(!shader)
+		{
+			printf("Could not load cubemap skybox shader\n");
+			return;
+		}
+		isInit = true;
+	}
+
+	std::string right  = path+"/right.png";
+	std::string left   = path+"/left.png";
+	std::string top    = path+"/top.png";
+	std::string bottom = path+"/bottom.png";
+	std::string front  = path+"/front.png";
+	std::string back   = path+"/back.png";
+
+	texture =
+		Util::loadCubemap(
+			right.c_str(), left.c_str(),
+			top.c_str(),   bottom.c_str(),
+			front.c_str(), back.c_str());
+
+	if(!texture)
+	{
+		printf("Could not load cubemap skybox image\n");
+		return;
+	}
+
+	glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
+
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+}
+Skybox::Skybox(Skybox&& other): texture(other.texture) {other.texture=0;};
+Skybox& Skybox::operator=(Skybox&& other)
+{
+	texture = other.texture;
+	other.texture=0;
+	return *this;
+}
+void Skybox::draw(glm::mat4 p, glm::mat4 v, glm::vec3 pos)
+{
+	glUseProgram(shader);
+    //send vertices
+	glBindVertexArray(vaoLn[0]);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(0);
+
+	//send uniforms
+	GLuint pMatHandle  = glGetUniformLocation(shader, "pMat");
+	GLuint vMatHandle  = glGetUniformLocation(shader, "vMat");
+	glUniformMatrix4fv(pMatHandle, 1, GL_FALSE, glm::value_ptr(p));
+	glUniformMatrix4fv(vMatHandle, 1, GL_FALSE, glm::value_ptr(v));
+
+	//activate/send texture
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
+
+	//render
+	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+	glEnable(GL_CULL_FACE);
+	glFrontFace(GL_CCW);
+	glDisable(GL_DEPTH_TEST);
+	glDrawElements(GL_TRIANGLES, m.getNumIndices(), GL_UNSIGNED_INT, 0);
+	glEnable(GL_DEPTH_TEST);
+	glFrontFace(GL_CW);
+
+}
+Skybox::operator bool() const
+{
+	return isInit && texture;
+}
+Skybox::~Skybox()
+{
+	glDeleteTextures(1, &texture);
 }
 
 

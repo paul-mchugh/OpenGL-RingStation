@@ -10,11 +10,10 @@
 #include "World.h"
 #include "Camera.h"
 
-//globals
+//globals consts
 const float rotateMagnitude = 30;
 const float moveMagnitude = 10;
 const float spotOff = 5;
-ShaderPair renderingPrograms;
 
 //forward declarations
 void init(GLFWwindow* window);
@@ -40,8 +39,10 @@ float initialPitch=-25.0f;
 float initialPan=-50.0f;
 glm::vec3 initialLightLOC(-64.67,13.27,-40.90);
 glm::vec3 initialLightDIR(-0.04,-0.38,-0.92);
+ShaderPair renderingPrograms;
 Camera c;
 World wld;
+Skybox sbox;
 //movable light
 Object* iLight;
 bool grabbedLight=false;
@@ -57,7 +58,7 @@ int main()
 	if(glewInit() != GLEW_OK) exit(1);
 	glfwSwapInterval(1);
 
-//	glEnable(GL_DEBUG_OUTPUT);
+	glEnable(GL_DEBUG_OUTPUT);
 	//gl debug
 	if(GLEW_ARB_debug_output)
 		glDebugMessageCallbackARB(&DebugCB, NULL);
@@ -96,6 +97,9 @@ void init(GLFWwindow* window)
 	c.pan(glm::radians(initialPan));
 	c.pitch(glm::radians(initialPitch));
 
+	//build skybox
+	sbox=Skybox("img/skybox");
+
 	//model data
 	GLuint sunTexture     = Util::loadTexture("img/sun_euv.png");
 	GLuint marsTexture    = Util::loadTexture("img/mars.jpg");
@@ -116,7 +120,7 @@ void init(GLFWwindow* window)
 	Material silver = Material::getSilver();
 	Material   gold = Material::getGold();
 
-	userlight ={.ambient=glm::vec4{0.05,0.05,0.05,1}, .diffuse=glm::vec4{1,1,1,1},
+	userlight ={.ambient=glm::vec4{0.05,0.05,0.05,1}, .diffuse=glm::vec4{0.7,0.7,0.7,1},
 	            .specular=glm::vec4{0.8,0.8,0.8,1},.direction=initialLightDIR,
 	            .cutoff=glm::radians(35.0f),.exponent=30,
 	            .enabled=true,.type=LightType::POSITIONAL};
@@ -173,8 +177,8 @@ void init(GLFWwindow* window)
 	slxm->attachLight(sllxm);
 	slzp->attachLight(sllzp);
 
-	wld.directional={.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
-	                 .specular=glm::vec4{1,1,1,1},.direction=glm::vec3{1,-0.15,1.25},
+	wld.directional={.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{0.7,0.7,0.7,1},
+	                 .specular=glm::vec4{1,1,1,1},.direction=glm::vec3{-0.96,-0.23,-0.14},
 	                 .enabled=true,.type=LightType::DIRECTIONAL};
 	wld.ambient={.ambient=glm::vec4{0.2,0.2,0.2,1},.enabled=true,.type=LightType::AMBIENT};
 
@@ -192,7 +196,7 @@ void display(GLFWwindow* window, double currentTime)
 	//handle keyboard input
 	handleKeys(window, timeDiff);
 	handleUserLight();
-	//update the objects and relight
+	//update the objects if not paused
 	if(!paused)
 		wld.update(timeDiff);
 	lastTime = currentTime;
@@ -205,6 +209,14 @@ void display(GLFWwindow* window, double currentTime)
 	pMat = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 1000.0f);
 	vMat = c.getTransform();
 	glm::mat4 invvMat = glm::transpose(glm::inverse(vMat));
+
+	//clear depths
+	glClear(GL_DEPTH_BUFFER_BIT);
+	glClearColor(0,0,0,1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	//draw the skybox
+	sbox.draw(pMat, vMat, c.getPos());
 
 	//relight computes the actual positions of all the lights(not just relative positions)
 	wld.relight();

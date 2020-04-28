@@ -1,11 +1,32 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include "Model.h"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <utility>
 #include <string>
+
+//constants
+const GLuint cubemapFaces[] =
+{
+	GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+	GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+	GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
+};
+const glm::vec3 faceDirv[] =
+{
+	glm::vec3{ 1, 0, 0},
+	glm::vec3{-1, 0, 0},
+	glm::vec3{ 0, 1, 0},
+	glm::vec3{ 0,-1, 0},
+	glm::vec3{ 0, 0, 1},
+	glm::vec3{ 0, 0,-1}
+};
 
 class Util
 {
@@ -22,6 +43,10 @@ public:
 										const char* tCS=NULL, const char* tES=NULL,
 										const char* gp=NULL);
 	static GLuint loadTexture(const char* filename);
+	static GLuint
+		loadCubemap(const char* xp, const char* xm,
+		            const char* yp, const char* ym,
+		            const char* zp, const char *zM);
 	static void printGLInfo();
 };
 
@@ -50,6 +75,27 @@ private:
 	static bool isInit;
 public:
 	static void draw(glm::mat4 p, glm::mat4 v, glm::vec3 src, glm::vec3 dst, glm::vec3 color);
+};
+
+class Skybox
+{
+private:
+	static GLuint vaoLn[1];
+	static GLuint vbo[2];
+	static GLuint shader;
+	static bool   isInit;
+	static Model  m;
+	GLuint texture;
+public:
+	Skybox();
+	Skybox(std::string path);
+	Skybox(Skybox& other) = delete;
+	Skybox& operator=(Skybox& other) = delete;
+	Skybox(Skybox&& other);
+	Skybox& operator=(Skybox&& other);
+	void draw(glm::mat4 p, glm::mat4 v, glm::vec3 pos);
+	operator bool() const;
+	~Skybox();
 };
 
 struct ShaderPair
