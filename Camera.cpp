@@ -8,7 +8,7 @@ Camera::Camera() : U{1,0,0}, V{0,1,0}, N{0,0,1}, C{0,0,0}
 {}
 
 
-glm::mat4 Camera::getTransform()
+glm::mat4 Camera::getTransform(float offset)
 {
 	//rotate
 	glm::mat4 rot{1.0f};
@@ -18,7 +18,7 @@ glm::mat4 Camera::getTransform()
 
 	//translate
 	glm::mat4 trans{1.0f};
-	trans = glm::translate(trans, -C);
+	trans = glm::translate(trans, -(C+glm::normalize(U)*offset));
 
 	return rot*trans;
 }
@@ -54,6 +54,6 @@ void Camera::roll(float radians)
 	V = glm::vec3{rollM * glm::vec4{V,1}};
 }
 
-glm::vec3 Camera::getPos(){ return C; }
+glm::vec3 Camera::getPos()   { return C; }
 
-glm::vec3 Camera::getDir(){ return N; }
+glm::vec3 Camera::getDir()   { return N; }

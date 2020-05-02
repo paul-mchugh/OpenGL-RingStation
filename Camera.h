@@ -12,7 +12,7 @@ class Camera
 
 public:
 	Camera();
-	glm::mat4 getTransform();
+	glm::mat4 getTransform(float offset=0);
 	void setPos(glm::vec3 pos);
 	void moveBy(glm::vec3 chPos);
 	void pan(float radians);

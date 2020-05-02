@@ -10,14 +10,25 @@
 #include "World.h"
 #include "Camera.h"
 
+
+enum AnaglyphMode
+{
+	OFF=0,
+	RED_CYAN=1,
+	GREEN_PURPLE=2
+};
+
 //globals consts
 const float rotateMagnitude = 30;
 const float moveMagnitude = 10;
 const float spotOff = 5;
+const float IOD = 0.05f;
+const char* const modeToStr[]={"Off","Red-Cyan","Green-Purple"};
 
 //forward declarations
 void init(GLFWwindow* window);
 void display(GLFWwindow* window, double currentTime);
+glm::mat4 compPerspective(float fov, float aspect, float near, float far, float IOD, float lr);
 void handleKeys(GLFWwindow* window, double time);
 void handleUserLight();
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
@@ -31,9 +42,11 @@ void printHelp(void);
 //global variables
 bool axesEnabled=false;
 bool paused=false;
+
 GLint viewMap = -1;
 GLint viewFace = 0;
 double lastTime=0;
+AnaglyphMode anaMode=AnaglyphMode::OFF;
 glm::vec3 initialCameraLOC(-90.21,21.44,-19.81);
 float initialPitch=-25.0f;
 float initialPan=-50.0f;
@@ -202,21 +215,16 @@ void display(GLFWwindow* window, double currentTime)
 	lastTime = currentTime;
 
 	//build perspective and view matrices
-	glm::mat4 pMat, vMat;
+	glm::mat4 pMat, vMat, invvMat;
 	int width, height;
 	glfwGetFramebufferSize(window, &width, &height);
 	float aspect = (float)width/(float)height;
-	pMat = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 1000.0f);
 	vMat = c.getTransform();
-	glm::mat4 invvMat = glm::transpose(glm::inverse(vMat));
 
-	//clear depths
+	//clear buffers
 	glClear(GL_DEPTH_BUFFER_BIT);
 	glClearColor(0,0,0,1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
-
-	//draw the skybox
-	sbox.draw(pMat, vMat, c.getPos());
 
 	//relight computes the actual positions of all the lights(not just relative positions)
 	wld.relight();
@@ -231,15 +239,55 @@ void display(GLFWwindow* window, double currentTime)
 	glDrawBuffer(viewMap==-1?GL_FRONT:GL_NONE);
 	if(viewMap==-1)glViewport(0,0,width,height);
 
-	//send the uniforms to the GPU
-	glUseProgram(renderingPrograms.renderProgram);
-	GLuint projHandleR = glGetUniformLocation(renderingPrograms.renderProgram, "proj_matrix");
-	glUniformMatrix4fv(projHandleR, 1, GL_FALSE, glm::value_ptr(pMat));
-	GLuint invvHandleR = glGetUniformLocation(renderingPrograms.renderProgram, "invv_matrix");
-	glUniformMatrix4fv(invvHandleR, 1, GL_FALSE, glm::value_ptr(invvMat));
-	wld.glTransferLights(vMat, renderingPrograms.renderProgram, "lights");
 
-	wld.draw(vMat);
+	//render one or both eyes i==0 -> left eye, i==1 -> right eye
+	for(int i=0;i<1+(anaMode!=AnaglyphMode::OFF); ++i)
+	{
+		//re-clear the depth buffer
+		glClear(GL_DEPTH_BUFFER_BIT);
+		//set eye specific uniforms/settings
+		if(anaMode==AnaglyphMode::OFF||viewMap!=-1)
+		{
+			pMat = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 1000.0f);
+			vMat = c.getTransform();
+			invvMat = glm::transpose(glm::inverse(vMat));
+			glColorMask(true, true, true, true);
+		}
+		else
+		{
+			float lr = i*2-1;
+			pMat = compPerspective(glm::radians(60.0f), aspect, 0.65, 150,lr,IOD);
+			vMat = c.getTransform(lr*IOD/2);
+			invvMat = glm::transpose(glm::inverse(vMat));
+			if(anaMode==AnaglyphMode::RED_CYAN)
+			{
+				if(i==0) //left eye
+					glColorMask(true,  false, false, false);
+				else     //right eye
+					glColorMask(false, true,  true,  false);
+			}
+			else if(anaMode==AnaglyphMode::GREEN_PURPLE)
+			{
+				if(i==0) //left eye
+					glColorMask(true,  false, true,  false);
+				else     //right eye
+					glColorMask(false, true,  false, false);
+			}
+		}
+		//draw the skybox
+		sbox.draw(pMat, vMat, c.getPos());
+
+		//send the uniforms to the GPU
+		glUseProgram(renderingPrograms.renderProgram);
+		GLuint invvHandleR = glGetUniformLocation(renderingPrograms.renderProgram, "invv_matrix");
+		glUniformMatrix4fv(invvHandleR, 1, GL_FALSE, glm::value_ptr(invvMat));
+		GLuint projHandleR = glGetUniformLocation(renderingPrograms.renderProgram, "proj_matrix");
+		glUniformMatrix4fv(projHandleR, 1, GL_FALSE, glm::value_ptr(pMat));
+		wld.glTransferLights(vMat, renderingPrograms.renderProgram, "lights");
+
+		//invoke draw
+		wld.draw(vMat);
+	}
 
 	if(axesEnabled)
 	{
@@ -250,6 +298,18 @@ void display(GLFWwindow* window, double currentTime)
 		wld.drawLightVecs(pMat, vMat);
 	}
 //	Util::checkOpenGLError();
+}
+
+glm::mat4
+	compPerspective(float fov, float aspect, float near, float far, float IOD, float lr)
+{
+	float top, bottom, left, right, shift;
+	top = glm::tan(fov/2.0f) * near;
+	bottom = -top;
+	shift = (IOD/2.0f) * (near/far);
+	left = -aspect*top - shift*lr;
+	right = aspect*top - shift*lr;
+	return glm::frustum(left, right, bottom, top, near, far);
 }
 
 #define GK(key) (glfwGetKey(window,GLFW_KEY_ ## key ) == GLFW_PRESS)
@@ -315,6 +375,13 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		userlight.enabled= !userlight.enabled;
 		iLight->attachLight(userlight);
 		printf("Pressed key   T: Light toggled %s\n",(userlight.enabled?"On":"Off"));
+	}
+	else if(key == GLFW_KEY_G && action == GLFW_PRESS)
+	{
+		anaMode=(AnaglyphMode)(anaMode+1);
+		if(anaMode>2)
+			anaMode=(AnaglyphMode)(anaMode-3);
+		printf("Pressed key   G: Toggles Anaglyph mode to %s\n",modeToStr[anaMode]);
 	}
 	else if(key == GLFW_KEY_SPACE && action == GLFW_PRESS)
 	{
@@ -388,6 +455,7 @@ void printHelp(void)
 		"  R:  Reset camera to original position ((0,0,30), looking a the origin)\n"
 		"  P:  Toggle Pause time(default: off)\n"
 		"  T:  Toggle the user light on/off(default: on)\n"
+		"  G:  Toggle anaglyph mode(off/red-cyan/purple-green)(default: off)\n"
 		" SP:  Use space bar to toggle axes and other debug info(default: off)\n"
 		"W/S:  Forward/Backward\n"
 		"A/D:  Strafe left/Strafe right\n"
