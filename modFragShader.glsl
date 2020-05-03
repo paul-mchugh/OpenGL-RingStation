@@ -149,4 +149,5 @@ void main(void)
 		diffWSum   * material.diffuse.xyz+
 		specWSum   * material.specular.xyz;
 	color = vec4(lightV,1) * (texEn ? texture(samp,varyingTc) : vec4(1));
+//	color = vec4(normalize(varyingNorm),1);
 }

@@ -22,7 +22,7 @@ enum AnaglyphMode
 const float rotateMagnitude = 30;
 const float moveMagnitude = 10;
 const float spotOff = 5;
-const float IOD = 0.05f;
+const float IOD = 0.02f;
 const char* const modeToStr[]={"Off","Red-Cyan","Green-Purple"};
 
 //forward declarations
@@ -71,7 +71,7 @@ int main()
 	if(glewInit() != GLEW_OK) exit(1);
 	glfwSwapInterval(1);
 
-	glEnable(GL_DEBUG_OUTPUT);
+	//glEnable(GL_DEBUG_OUTPUT);
 	//gl debug
 	if(GLEW_ARB_debug_output)
 		glDebugMessageCallbackARB(&DebugCB, NULL);
@@ -95,7 +95,8 @@ int main()
 void init(GLFWwindow* window)
 {
 	renderingPrograms =
-		ShaderPair{Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl"),
+		ShaderPair{Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl",
+		                                     "modTcsShader.glsl",  "modTesShader.glsl"),
 		           Util::createShaderProgram("shadVertShader.glsl", "shadFragShader.glsl")};
 	if(!renderingPrograms) printf("Could not Load shader\n");
 	glfwSetKeyCallback(window, key_callback);
@@ -256,7 +257,7 @@ void display(GLFWwindow* window, double currentTime)
 		else
 		{
 			float lr = i*2-1;
-			pMat = compPerspective(glm::radians(60.0f), aspect, 0.65, 150,lr,IOD);
+			pMat = compPerspective(glm::radians(60.0f), aspect, 0.5, 150,lr,IOD);
 			vMat = c.getTransform(lr*IOD/2);
 			invvMat = glm::transpose(glm::inverse(vMat));
 			if(anaMode==AnaglyphMode::RED_CYAN)

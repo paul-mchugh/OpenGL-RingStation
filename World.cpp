@@ -618,7 +618,9 @@ void Object::drawAction(std::stack<glm::mat4>& mstack)
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[4]);
-	glDrawElements(GL_TRIANGLES, m.getNumIndices(), GL_UNSIGNED_INT, 0);
+	glPatchParameteri(GL_PATCH_VERTICES, 3);
+//	glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
+	glDrawElements(GL_PATCHES, m.getNumIndices(), GL_UNSIGNED_INT, 0);
 }
 
 void Object::relightAction(std::stack<glm::mat4>& mstack)
