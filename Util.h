@@ -102,8 +102,9 @@ struct ShaderPair
 {
 	GLuint renderProgram;
 	GLuint shadowProgram;
-	ShaderPair(GLuint rProgram=0);
-	ShaderPair(GLuint rProgram, GLuint sProgram);
+	bool renderTess, shadowTess;
+	ShaderPair(GLuint rProgram=0, bool rTess=false);
+	ShaderPair(GLuint rProgram, GLuint sProgram, bool rTess=false, bool sTess=false);
 	operator bool() const;
 };
 

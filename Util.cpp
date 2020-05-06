@@ -47,7 +47,7 @@ void Util::printProgramLog(GLuint prog)
 {
 	GLint len;
 	GLsizei lenRV;
-	glGetShaderiv(prog, GL_INFO_LOG_LENGTH, &len);
+	glGetProgramiv(prog, GL_INFO_LOG_LENGTH, &len);
 	if(len>0)
 	{
 		char* log=(char*)malloc(len*sizeof(*log));
@@ -449,9 +449,10 @@ Skybox::~Skybox()
 }
 
 
-ShaderPair::ShaderPair(GLuint rProgram) : ShaderPair{rProgram,rProgram} {};
-ShaderPair::ShaderPair(GLuint rProgram, GLuint sProgram) :
-	renderProgram{rProgram}, shadowProgram{sProgram} {};
+ShaderPair::ShaderPair(GLuint rProgram, bool rTess) : ShaderPair{rProgram,rProgram} {};
+ShaderPair::ShaderPair(GLuint rProgram, GLuint sProgram, bool rTess, bool sTess):
+	renderProgram{rProgram}, shadowProgram{sProgram},
+	renderTess{rTess}, shadowTess{sTess} {};
 ShaderPair::operator bool() const
 {
 	return renderProgram || shadowProgram;

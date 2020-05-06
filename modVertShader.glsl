@@ -32,12 +32,16 @@ struct Material
 uniform Light lights[MAX_LIGHTS];
 uniform Material material;
 uniform bool texEn;
+uniform bool dMapEn;
+uniform bool nMapEn;
 uniform int atLight;
 uniform mat4 mv_matrix;
 uniform mat4 invv_matrix;
 uniform mat4 proj_matrix;
 uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D samp;
+layout (binding=1) uniform sampler2D depthMap;
+layout (binding=2) uniform sampler2D normalMap;
 uniform mat4 shadMVP[MAX_LIGHTS];
 uniform sampler2DShadow flats[MAX_LIGHTS];
 uniform samplerCubeShadow cubes[MAX_LIGHTS];
@@ -46,15 +50,6 @@ layout (location=0) in vec3 position;
 layout (location=1) in vec2 tc;
 layout (location=2) in vec3 norm;
 layout (location=3) in vec3 tan;
-
-/*
-out vec2 varyingTc;
-out vec3 varyingNorm;
-out vec3 varyingLightDir[MAX_LIGHTS];
-out vec3 varyingHalfVec [MAX_LIGHTS];
-out vec4 shadowCoord[MAX_LIGHTS];
-out vec3 varyingVPos;
-*/
 
 out vec3 pos_TCS;
 out vec2 tc_TCS;
@@ -69,45 +64,3 @@ void main(void)
 	norm_TCS = norm;
 	tan_TCS  = tan;
 }
-
-/*
-void main(void)
-{
-	//set position and pass it through to the shader
-	vec4 wsVertPos  = mv_matrix*vec4(position,1.0);
-	varyingVPos = wsVertPos.xyz;
-	gl_Position = proj_matrix * wsVertPos;
-
-	//compute norm and pass it through
-	varyingNorm = (norm_matrix * vec4(norm,1.0)).xyz;
-
-	//pass compute and pass each light direction
-	for(int i=0;i<MAX_LIGHTS;++i)
-	{
-		Light l = lights[i];
-		switch(l.type)
-		{
-		case POSITIONAL:
-			varyingLightDir[i] = l.position-varyingVPos;
-			shadowCoord[i] = vec4(vec3(shadMVP[i]*vec4(position,1.0))-l.absPosition,1);
-			break;
-		case SPOTLIGHT:
-			varyingLightDir[i] = l.position-varyingVPos;
-			shadowCoord[i] = shadMVP[i] * vec4(position,1.0);
-		break;
-		case DIRECTIONAL:
-			varyingLightDir[i] = (-(invv_matrix*vec4(l.direction,1))).xyz;
-			shadowCoord[i] = shadMVP[i] * vec4(position,1.0);
-			break;
-		case AMBIENT:
-		case NO_LIGHT:
-			break;
-		}
-		varyingHalfVec[i] = normalize(varyingLightDir[i]) - normalize(varyingVPos);
-	}
-//	gl_Position= shadowCoord[1];
-
-	//pass the texture coordinates
-	varyingTc = tc;
-}
-*/

@@ -28,6 +28,7 @@ const char* const modeToStr[]={"Off","Red-Cyan","Green-Purple"};
 //forward declarations
 void init(GLFWwindow* window);
 void display(GLFWwindow* window, double currentTime);
+void setupScene(void);
 glm::mat4 compPerspective(float fov, float aspect, float near, float far, float IOD, float lr);
 void handleKeys(GLFWwindow* window, double time);
 void handleUserLight();
@@ -53,6 +54,7 @@ float initialPan=-50.0f;
 glm::vec3 initialLightLOC(-64.67,13.27,-40.90);
 glm::vec3 initialLightDIR(-0.04,-0.38,-0.92);
 ShaderPair renderingPrograms;
+ShaderPair renderingProgramsTess;
 Camera c;
 World wld;
 Skybox sbox;
@@ -66,12 +68,12 @@ int main()
 	if(!glfwInit()) exit(1);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	GLFWwindow* window = glfwCreateWindow(800, 800, "CSC155: HW3", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(800, 800, "CSC155: HW4", NULL, NULL);
 	glfwMakeContextCurrent(window);
 	if(glewInit() != GLEW_OK) exit(1);
 	glfwSwapInterval(1);
 
-	//glEnable(GL_DEBUG_OUTPUT);
+//	glEnable(GL_DEBUG_OUTPUT);
 	//gl debug
 	if(GLEW_ARB_debug_output)
 		glDebugMessageCallbackARB(&DebugCB, NULL);
@@ -94,9 +96,13 @@ int main()
 
 void init(GLFWwindow* window)
 {
-	renderingPrograms =
+	renderingProgramsTess =
 		ShaderPair{Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl",
 		                                     "modTcsShader.glsl",  "modTesShader.glsl"),
+		           Util::createShaderProgram("shadVertShader.glsl", "shadFragShader.glsl"),
+		           true};
+	renderingPrograms =
+		ShaderPair{Util::createShaderProgram("modVertShaderNT.glsl", "modFragShader.glsl"),
 		           Util::createShaderProgram("shadVertShader.glsl", "shadFragShader.glsl")};
 	if(!renderingPrograms) printf("Could not Load shader\n");
 	glfwSetKeyCallback(window, key_callback);
@@ -111,93 +117,7 @@ void init(GLFWwindow* window)
 	c.pan(glm::radians(initialPan));
 	c.pitch(glm::radians(initialPitch));
 
-	//build skybox
-	sbox=Skybox("img/skybox");
-
-	//model data
-	GLuint sunTexture     = Util::loadTexture("img/sun_euv.png");
-	GLuint marsTexture    = Util::loadTexture("img/mars.jpg");
-	GLuint europaTexture  = Util::loadTexture("img/europa.jpg");
-	GLuint ringWldTexture = Util::loadTexture("img/rw_test.png");
-	GLuint earthTexture   = Util::loadTexture("img/earth.jpg");
-	GLuint shuttleTexture = Util::loadTexture("img/spstob_1.jpg");
-
-	//habitat internal region is height=habwidth, width=2*pi*(1-wallThick)
-	//texture aspect ratio = 62.517777
-	Model sunm  = Generator::generateSphere();
-	Model rh   = Generator::generateRingHab(0.1,0.005,0.01,500);
-	Model shu  = ModelImporter::parseOBJ("models/shuttle.obj");
-	Model s2   = Generator::generateSphere();
-	Model spot  = Generator::generateSphere();
-
-	Material canvas = Material::getCanvas();
-	Material silver = Material::getSilver();
-	Material   gold = Material::getGold();
-
-	userlight ={.ambient=glm::vec4{0.05,0.05,0.05,1}, .diffuse=glm::vec4{0.7,0.7,0.7,1},
-	            .specular=glm::vec4{0.8,0.8,0.8,1},.direction=initialLightDIR,
-	            .cutoff=glm::radians(35.0f),.exponent=30,
-	            .enabled=true,.type=LightType::POSITIONAL};
-	Light sllzp{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
-	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{ 0,0, 1,1},
-	            .cutoff=glm::radians(22.5f),.exponent=30,
-	            .enabled=true,.type=LightType::SPOTLIGHT};
-	Light sllzm{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
-	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{ 0,0,-1,1},
-	            .cutoff=glm::radians(22.5f),.exponent=30,
-	            .enabled=true,.type=LightType::SPOTLIGHT};
-	Light sllxp{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
-	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{ 1,0, 0,1},
-	            .cutoff=glm::radians(22.5f),.exponent=30,
-	            .enabled=true,.type=LightType::SPOTLIGHT};
-	Light sllxm{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
-	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{-1,0, 0,1},
-	            .cutoff=glm::radians(22.5f),.exponent=30,
-	            .enabled=true,.type=LightType::SPOTLIGHT};
-
-	float zOff = -0.1;
-	Object* slzp =
-		Object::makeAbsolute(&wld, spot, renderingPrograms, 0, silver, 1,
-		                     glm::vec3{       0, zOff, spotOff},
-		                     glm::vec3{0,1,0}, 0, 0.0f);
-	Object* slzm =
-		Object::makeAbsolute(&wld, spot, renderingPrograms, 0, silver, 1,
-		                     glm::vec3{       0, zOff,-spotOff},
-		                     glm::vec3{0,1,0}, 0, 0.25f);
-	Object* slxp =
-		Object::makeAbsolute(&wld, spot, renderingPrograms, 0, silver, 1,
-		                     glm::vec3{ spotOff, zOff, 0},
-		                     glm::vec3{0,1,0}, 0, 0.5f);
-	Object* slxm =
-		Object::makeAbsolute(&wld, spot, renderingPrograms, 0, silver, 1,
-		                     glm::vec3{-spotOff, zOff, 0},
-		                     glm::vec3{0,1,0}, 0, 0.75f);
-	iLight =
-		Object::makeAbsolute(&wld, sunm, renderingPrograms, 0, gold, 1,
-		                     initialLightLOC,
-		                     glm::vec3{0.1f,1,0}, 15, 0.6f);
-	Object* ringHab =
-		Object::makeAbsolute(&wld, rh, renderingPrograms, ringWldTexture, canvas, 100,
-		                     glm::vec3{0,0,0},
-		                     glm::vec3{0,1,0}, 60, 0);
-	Object* shuttle =
-		Object::makeAbsolute(&wld, shu, renderingPrograms, shuttleTexture, canvas, 2,
-		                     glm::vec3{-65.99,5.63,-60.51},
-		                     glm::vec3{-1,0,0   }, 10, 0.25);
-
-	iLight->attachLight(userlight);
-	slxp->attachLight(sllxp);
-	slzm->attachLight(sllzm);
-	slxm->attachLight(sllxm);
-	slzp->attachLight(sllzp);
-
-	wld.directional={.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{0.7,0.7,0.7,1},
-	                 .specular=glm::vec4{1,1,1,1},.direction=glm::vec3{-0.96,-0.23,-0.14},
-	                 .enabled=true,.type=LightType::DIRECTIONAL};
-	wld.ambient={.ambient=glm::vec4{0.2,0.2,0.2,1},.enabled=true,.type=LightType::AMBIENT};
-
-	ringHab->addChild(*shuttle);
-
+	setupScene();
 
 	Util::printGLInfo();
 	printHelp();
@@ -285,6 +205,13 @@ void display(GLFWwindow* window, double currentTime)
 		GLuint projHandleR = glGetUniformLocation(renderingPrograms.renderProgram, "proj_matrix");
 		glUniformMatrix4fv(projHandleR, 1, GL_FALSE, glm::value_ptr(pMat));
 		wld.glTransferLights(vMat, renderingPrograms.renderProgram, "lights");
+		//send the uniforms to the GPU
+		glUseProgram(renderingProgramsTess.renderProgram);
+		GLuint invvHandleRT=glGetUniformLocation(renderingProgramsTess.renderProgram, "invv_matrix");
+		glUniformMatrix4fv(invvHandleRT, 1, GL_FALSE, glm::value_ptr(invvMat));
+		GLuint projHandleRT=glGetUniformLocation(renderingProgramsTess.renderProgram, "proj_matrix");
+		glUniformMatrix4fv(projHandleRT, 1, GL_FALSE, glm::value_ptr(pMat));
+		wld.glTransferLights(vMat, renderingProgramsTess.renderProgram, "lights");
 
 		//invoke draw
 		wld.draw(vMat);
@@ -299,6 +226,100 @@ void display(GLFWwindow* window, double currentTime)
 		wld.drawLightVecs(pMat, vMat);
 	}
 //	Util::checkOpenGLError();
+}
+
+void setupScene(void)
+{
+	//build skybox
+	sbox=Skybox("img/skybox");
+
+	//model data
+//	GLuint sunTexture      = Util::loadTexture("img/sun_euv.png");
+//	GLuint marsTexture     = Util::loadTexture("img/mars.jpg");
+//	GLuint europaTexture   = Util::loadTexture("img/europa.jpg");
+	GLuint ringWldTexture  = Util::loadTexture("img/rw_test.png");
+	GLuint ringWldDepthMap = Util::loadTexture("img/rw_depth.png");
+//	GLuint earthTexture    = Util::loadTexture("img/earth.jpg");
+	GLuint shuttleTexture  = Util::loadTexture("img/spstob_1.jpg");
+
+	//habitat internal region is height=habwidth, width=2*pi*(1-wallThick)
+	//texture aspect ratio = 62.517777
+	Model sunm  = Generator::generateSphere();
+	Model rh   = Generator::generateRingHab(0.1,0.005,0.015,500);
+	Model shu  = ModelImporter::parseOBJ("models/shuttle.obj");
+	Model s2   = Generator::generateSphere();
+	Model spot  = Generator::generateSphere();
+
+	Material canvas = Material::getCanvas();
+	Material silver = Material::getSilver();
+	Material   gold = Material::getGold();
+
+	userlight ={.ambient=glm::vec4{0.05,0.05,0.05,1}, .diffuse=glm::vec4{0.7,0.7,0.7,1},
+	            .specular=glm::vec4{0.8,0.8,0.8,1},.direction=initialLightDIR,
+	            .cutoff=glm::radians(35.0f),.exponent=30,
+	            .enabled=true,.type=LightType::POSITIONAL};
+	Light sllzp{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
+	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{ 0,0, 1,1},
+	            .cutoff=glm::radians(22.5f),.exponent=30,
+	            .enabled=true,.type=LightType::SPOTLIGHT};
+	Light sllzm{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
+	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{ 0,0,-1,1},
+	            .cutoff=glm::radians(22.5f),.exponent=30,
+	            .enabled=true,.type=LightType::SPOTLIGHT};
+	Light sllxp{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
+	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{ 1,0, 0,1},
+	            .cutoff=glm::radians(22.5f),.exponent=30,
+	            .enabled=true,.type=LightType::SPOTLIGHT};
+	Light sllxm{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
+	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{-1,0, 0,1},
+	            .cutoff=glm::radians(22.5f),.exponent=30,
+	            .enabled=true,.type=LightType::SPOTLIGHT};
+
+	float zOff = -0.1;
+	Object* slzp =
+		Object::makeAbsolute(&wld, spot, renderingPrograms, 0, silver, 1,
+		                     glm::vec3{       0, zOff, spotOff},
+		                     glm::vec3{0,1,0}, 0, 0.0f);
+	Object* slzm =
+		Object::makeAbsolute(&wld, spot, renderingPrograms, 0, silver, 1,
+		                     glm::vec3{       0, zOff,-spotOff},
+		                     glm::vec3{0,1,0}, 0, 0.25f);
+	Object* slxp =
+		Object::makeAbsolute(&wld, spot, renderingPrograms, 0, silver, 1,
+		                     glm::vec3{ spotOff, zOff, 0},
+		                     glm::vec3{0,1,0}, 0, 0.5f);
+	Object* slxm =
+		Object::makeAbsolute(&wld, spot, renderingPrograms, 0, silver, 1,
+		                     glm::vec3{-spotOff, zOff, 0},
+		                     glm::vec3{0,1,0}, 0, 0.75f);
+	iLight =
+		Object::makeAbsolute(&wld, sunm, renderingPrograms, 0, gold, 1,
+		                     initialLightLOC,
+		                     glm::vec3{0.1f,1,0}, 15, 0.6f);
+	Object* ringHab =
+		Object::makeAbsolute(&wld, rh, renderingProgramsTess, ringWldTexture, canvas, 100,
+		                     glm::vec3{0,0,0},
+		                     glm::vec3{0,1,0}, 60, 0);
+	Object* shuttle =
+		Object::makeAbsolute(&wld, shu, renderingPrograms, shuttleTexture, canvas, 2,
+		                     glm::vec3{-65.99,5.63,-60.51},
+		                     glm::vec3{-1,0,0   }, 10, 0.25);
+
+	//add maps
+	ringHab->attachDepthMap(ringWldDepthMap);
+
+	iLight->attachLight(userlight);
+	slxp->attachLight(sllxp);
+	slzm->attachLight(sllzm);
+	slxm->attachLight(sllxm);
+	slzp->attachLight(sllzp);
+
+	wld.directional={.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{0.7,0.7,0.7,1},
+	                 .specular=glm::vec4{1,1,1,1},.direction=glm::vec3{-0.96,-0.23,-0.14},
+	                 .enabled=true,.type=LightType::DIRECTIONAL};
+	wld.ambient={.ambient=glm::vec4{0.2,0.2,0.2,1},.enabled=true,.type=LightType::AMBIENT};
+
+	ringHab->addChild(*shuttle);
 }
 
 glm::mat4

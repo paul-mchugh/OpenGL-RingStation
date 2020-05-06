@@ -38,23 +38,27 @@ struct Material
 uniform Light lights[MAX_LIGHTS];
 uniform Material material;
 uniform bool texEn;
+uniform bool dMapEn;
+uniform bool nMapEn;
 uniform int atLight;
 uniform mat4 mv_matrix;
 uniform mat4 invv_matrix;
 uniform mat4 proj_matrix;
 uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D samp;
+layout (binding=1) uniform sampler2D depthMap;
+layout (binding=2) uniform sampler2D normalMap;
 uniform mat4 shadMVP[MAX_LIGHTS];
 uniform sampler2DShadow flats[MAX_LIGHTS];
 uniform samplerCubeShadow cubes[MAX_LIGHTS];
 
-in vec2 varyingTc;
-in vec3 varyingNorm;
 in vec3 varyingLightDir[MAX_LIGHTS];
 in vec3 varyingHalfVec [MAX_LIGHTS];
 in vec4 shadowCoord[MAX_LIGHTS];
 in vec3 varyingVPos;
-
+in vec2 varyingTc;
+in vec3 varyingNorm;
+in vec3 varyingTan;
 out vec4 color;
 
 float lookup(int i, float ox, float oy)
@@ -149,5 +153,4 @@ void main(void)
 		diffWSum   * material.diffuse.xyz+
 		specWSum   * material.specular.xyz;
 	color = vec4(lightV,1) * (texEn ? texture(samp,varyingTc) : vec4(1));
-//	color = vec4(normalize(varyingNorm),1);
 }

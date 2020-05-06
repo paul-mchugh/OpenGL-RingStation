@@ -77,6 +77,8 @@ private:
 	Model m;
 	ShaderPair shader;
 	GLuint texture;
+	GLuint depthMap=0;
+	GLuint normalMap=0;
 	Material mat;
 	GLuint vbo[5];
 	std::vector<int> children;
@@ -134,6 +136,8 @@ public:
 	void shadowAction(std::stack<glm::mat4>& mstack);
 	void updatePos(double timePassed);
 	void overrideAbsPos(glm::vec3 newPos);
+	void attachDepthMap(GLuint depthMap);
+	void attachNormalMap(GLuint normalMap);
 };
 
 #endif

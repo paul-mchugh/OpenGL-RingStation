@@ -585,11 +585,15 @@ void Object::drawAction(std::stack<glm::mat4>& mstack)
 	GLuint normHandle = glGetUniformLocation(rShader, "norm_matrix");
 	glm::mat4 normMat = glm::transpose(glm::inverse(mvMat));
 	glUniformMatrix4fv(normHandle, 1, GL_FALSE, glm::value_ptr(normMat));
-	GLuint texEnHandle = glGetUniformLocation(rShader, "texEn");
-	glProgramUniform1i(rShader, texEnHandle, texture!=0);
 	GLuint atLightHandle = glGetUniformLocation(rShader, "atLight");
 	glProgramUniform1i(rShader, atLightHandle, lightIndx);
 	mat.glTransfer(rShader, "material");
+	GLuint texEnHandle  = glGetUniformLocation(rShader, "texEn");
+	glProgramUniform1i(rShader, texEnHandle, !!texture);
+	GLuint dMapEnHandle = glGetUniformLocation(rShader, "dMapEn");
+	glProgramUniform1i(rShader, dMapEnHandle, !!depthMap);
+	GLuint nMapEnHandle = glGetUniformLocation(rShader, "nMapEn");
+	glProgramUniform1i(rShader, nMapEnHandle, !!normalMap);
 	//calculate and send the shadow MVP matrices to the GPU
 	for(int i=0; i<World::MAX_LIGHTS; ++i)
 	{
@@ -606,11 +610,21 @@ void Object::drawAction(std::stack<glm::mat4>& mstack)
 		glUniformMatrix4fv(shadMVPLOC, 1, GL_FALSE, glm::value_ptr(shadMVP));
 	}
 
-	//send the texture to the GPU
-	if(texture!=0)
+	//send the textures to the GPU
+	if(!!texture)
 	{
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, texture);
+	}
+	if(!!depthMap)
+	{
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, depthMap);
+	}
+	if(!!depthMap)
+	{
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, normalMap);
 	}
 
 	glEnable(GL_CULL_FACE);
@@ -618,9 +632,11 @@ void Object::drawAction(std::stack<glm::mat4>& mstack)
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[4]);
-	glPatchParameteri(GL_PATCH_VERTICES, 3);
-//	glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
-	glDrawElements(GL_PATCHES, m.getNumIndices(), GL_UNSIGNED_INT, 0);
+	if(shader.renderTess)
+		glPatchParameteri(GL_PATCH_VERTICES, 6);
+//	glPolygonMode(GL_FRONT_AND_BACK,shader.renderTess?GL_LINE:GL_FILL);
+	glDrawElements(shader.renderTess?GL_PATCHES:GL_TRIANGLES,
+	               m.getNumIndices(), GL_UNSIGNED_INT, 0);
 }
 
 void Object::relightAction(std::stack<glm::mat4>& mstack)
@@ -681,4 +697,14 @@ void Object::overrideAbsPos(glm::vec3 newPos)
 	{
 		p.a.pos=newPos;
 	}
+}
+
+void Object::attachDepthMap(GLuint depthMap)
+{
+	this->depthMap  = depthMap;
+}
+
+void Object::attachNormalMap(GLuint normalMap)
+{
+	this->normalMap = normalMap;
 }
