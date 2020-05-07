@@ -108,4 +108,8 @@ struct ShaderPair
 	operator bool() const;
 };
 
+class NoiseTexturesGen
+{
+	static GLuint genNoiseTex(int seed=997, int sx=100, int sy=100, int sz=100);
+};
 #endif

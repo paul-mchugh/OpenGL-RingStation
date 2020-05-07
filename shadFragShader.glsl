@@ -1,7 +1,12 @@
 #version 430
 
+uniform bool dMapEn;
+uniform mat4 mv_matrix;
+uniform mat4 proj_matrix;
+uniform mat4 norm_matrix;
 uniform mat4 mvp_matrix;
 layout (binding=0) uniform sampler2D samp;
+layout (binding=1) uniform sampler2D depthMap;
 
 in vec2 varyingTc;
 

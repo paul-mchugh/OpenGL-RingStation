@@ -24,6 +24,7 @@ const GLsizei shadRes=1024;//all opengl GPUs are guaranteed to support 1024x1024
 //dirty hack global var
 GLint currentShadowLight=-1;
 glm::mat4 drawvMat;
+glm::mat4 drawpMat;
 
 void World::init()
 {
@@ -185,6 +186,8 @@ void World::buildShadowBuffers(GLint viewMap, GLint viewFace)
 					}
 				}
 				vpMats[i]=pMat*vMat;
+				drawvMat=vMat;
+				drawpMat=pMat;
 				currentShadowLight=i;
 
 				//setup matrix stack and start walking the world
@@ -660,14 +663,27 @@ void Object::shadowAction(std::stack<glm::mat4>& mstack)
 	glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
 	glEnableVertexAttribArray(1);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(2);
 
 
 	//compute model coords of texture
-	glm::mat4 mvp = w->vpMats[currentShadowLight] * mstack.top();
+	glm::mat4 mvp   = w->vpMats[currentShadowLight] * mstack.top();
+	glm::mat4 mvMat = drawvMat * mstack.top();
 
 	//send the uniforms to the GPU
 	GLuint mvpHandle = glGetUniformLocation(sShader, "mvp_matrix");
 	glUniformMatrix4fv(mvpHandle,   1, GL_FALSE, glm::value_ptr(mvp));
+	GLuint mvHandle  = glGetUniformLocation(sShader, "mv_matrix");
+	glUniformMatrix4fv(mvHandle,    1, GL_FALSE, glm::value_ptr(mvMat));
+	GLuint pHandle   = glGetUniformLocation(sShader, "proj_matrix");
+	glUniformMatrix4fv(pHandle,     1, GL_FALSE, glm::value_ptr(drawpMat));
+	GLuint normHandle = glGetUniformLocation(sShader, "norm_matrix");
+	glm::mat4 normMat = glm::transpose(glm::inverse(mvMat));
+	glUniformMatrix4fv(normHandle, 1, GL_FALSE, glm::value_ptr(normMat));
+	GLuint dMapEnHandle = glGetUniformLocation(sShader, "dMapEn");
+	glProgramUniform1i(sShader, dMapEnHandle, !!depthMap);
 
 	//send the texture to the GPU
 	if(texture!=0)
@@ -675,13 +691,21 @@ void Object::shadowAction(std::stack<glm::mat4>& mstack)
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, texture);
 	}
+	if(!!depthMap)
+	{
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, depthMap);
+	}
 
 	glEnable(GL_CULL_FACE);
 	glFrontFace(GL_CCW);
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[4]);
-	glDrawElements(GL_TRIANGLES, m.getNumIndices(), GL_UNSIGNED_INT, 0);
+	if(shader.shadowTess)
+		glPatchParameteri(GL_PATCH_VERTICES, 6);
+	glDrawElements(shader.shadowTess?GL_PATCHES:GL_TRIANGLES,
+	               m.getNumIndices(), GL_UNSIGNED_INT, 0);
 }
 
 void Object::updatePos(double timePassed)

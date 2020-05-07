@@ -1,18 +1,27 @@
 #version 430
 
-layout (location=0) in vec3 position;
-layout (location=1) in vec2 tc;
-
+uniform bool dMapEn;
+uniform mat4 mv_matrix;
+uniform mat4 proj_matrix;
+uniform mat4 norm_matrix;
 uniform mat4 mvp_matrix;
 layout (binding=0) uniform sampler2D samp;
+layout (binding=1) uniform sampler2D depthMap;
 
-out vec2 varyingTc;
+layout (location=0) in vec3 position;
+layout (location=1) in vec2 tc;
+layout (location=2) in vec3 norm;
+
+out vec3 pos_TCS;
+out vec2 tc_TCS;
+out vec3 norm_TCS;
 
 void main(void)
 {
 	//set position and pass it through to the frag shader
-	gl_Position = mvp_matrix * vec4(position,1);
+	pos_TCS  = position;
 	//pass the texture coordinates
-	varyingTc = tc;
-//	varyingTc = vec2(1,(mvp_matrix* vec4(position,1)).y);
+	tc_TCS   = tc;
+	//pass the norms
+	norm_TCS = norm;
 }

@@ -96,10 +96,30 @@ float computeCubeShadow(int i)
 	return texture(cubes[i], vec4(L,d));
 }
 
+vec3 getNormal()
+{
+	if(nMapEn)
+	{
+		vec3  norm = normalize(varyingNorm);
+		vec3   tan = normalize(varyingTan);
+		tan = normalize(tan - dot(tan, norm) * norm);
+		vec3 bitan = cross(tan, norm);
+		mat3 tbn = mat3(tan, bitan, norm);
+		vec3 newNorm = texture(normalMap, varyingTc).xyz;
+		newNorm = newNorm * 2 - 1;//to vector from color
+		newNorm = tbn * newNorm;//to eye space
+		return newNorm;
+	}
+	else
+	{
+		return normalize(varyingNorm);
+	}
+}
+
 void main(void)
 {
 	//compute norm and pos
-	vec3 N = normalize( varyingNorm);
+	vec3 N = getNormal();
 	vec3 V = normalize(-varyingVPos);
 	//compute ambient
 	vec3 ambientSum = vec3(0);
@@ -153,4 +173,5 @@ void main(void)
 		diffWSum   * material.diffuse.xyz+
 		specWSum   * material.specular.xyz;
 	color = vec4(lightV,1) * (texEn ? texture(samp,varyingTc) : vec4(1));
+//	color = vec4(length(lightV)>0.05?1.0f:0.0f,0,1,1);
 }

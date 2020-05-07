@@ -60,7 +60,8 @@ World wld;
 Skybox sbox;
 //movable light
 Object* iLight;
-bool grabbedLight=false;
+bool  grabbedLight=false;
+float fadeLevel=1.0;
 Light userlight;
 
 int main()
@@ -73,7 +74,7 @@ int main()
 	if(glewInit() != GLEW_OK) exit(1);
 	glfwSwapInterval(1);
 
-//	glEnable(GL_DEBUG_OUTPUT);
+	glEnable(GL_DEBUG_OUTPUT);
 	//gl debug
 	if(GLEW_ARB_debug_output)
 		glDebugMessageCallbackARB(&DebugCB, NULL);
@@ -99,11 +100,12 @@ void init(GLFWwindow* window)
 	renderingProgramsTess =
 		ShaderPair{Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl",
 		                                     "modTcsShader.glsl",  "modTesShader.glsl"),
-		           Util::createShaderProgram("shadVertShader.glsl", "shadFragShader.glsl"),
-		           true};
+		           Util::createShaderProgram("shadVertShader.glsl", "shadFragShader.glsl",
+		                                     "shadTcsShader.glsl",    "shadTesShader.glsl"),
+		           true,true};
 	renderingPrograms =
-		ShaderPair{Util::createShaderProgram("modVertShaderNT.glsl", "modFragShader.glsl"),
-		           Util::createShaderProgram("shadVertShader.glsl", "shadFragShader.glsl")};
+		ShaderPair{Util::createShaderProgram("modVertShaderNT.glsl",  "modFragShader.glsl"),
+		           Util::createShaderProgram("shadVertShaderNT.glsl", "shadFragShader.glsl")};
 	if(!renderingPrograms) printf("Could not Load shader\n");
 	glfwSetKeyCallback(window, key_callback);
 	glfwSetScrollCallback(window, scroll_callback);
@@ -237,13 +239,14 @@ void setupScene(void)
 //	GLuint sunTexture      = Util::loadTexture("img/sun_euv.png");
 //	GLuint marsTexture     = Util::loadTexture("img/mars.jpg");
 //	GLuint europaTexture   = Util::loadTexture("img/europa.jpg");
-	GLuint ringWldTexture  = Util::loadTexture("img/rw_test.png");
+	GLuint ringWldTexture  = Util::loadTexture("img/rw_texture.png");
 	GLuint ringWldDepthMap = Util::loadTexture("img/rw_depth.png");
+	GLuint ringWldNormMap  = Util::loadTexture("img/rw_norm.png");
 //	GLuint earthTexture    = Util::loadTexture("img/earth.jpg");
 	GLuint shuttleTexture  = Util::loadTexture("img/spstob_1.jpg");
 
 	//habitat internal region is height=habwidth, width=2*pi*(1-wallThick)
-	//texture aspect ratio = 62.517777
+	//rw unit dimensions 6.251769 X 0.1
 	Model sunm  = Generator::generateSphere();
 	Model rh   = Generator::generateRingHab(0.1,0.005,0.015,500);
 	Model shu  = ModelImporter::parseOBJ("models/shuttle.obj");
@@ -257,7 +260,7 @@ void setupScene(void)
 	userlight ={.ambient=glm::vec4{0.05,0.05,0.05,1}, .diffuse=glm::vec4{0.7,0.7,0.7,1},
 	            .specular=glm::vec4{0.8,0.8,0.8,1},.direction=initialLightDIR,
 	            .cutoff=glm::radians(35.0f),.exponent=30,
-	            .enabled=true,.type=LightType::POSITIONAL};
+	            .enabled=true,.type=LightType::SPOTLIGHT};
 	Light sllzp{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
 	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{ 0,0, 1,1},
 	            .cutoff=glm::radians(22.5f),.exponent=30,
@@ -307,6 +310,7 @@ void setupScene(void)
 
 	//add maps
 	ringHab->attachDepthMap(ringWldDepthMap);
+	ringHab->attachNormalMap(ringWldNormMap);
 
 	iLight->attachLight(userlight);
 	slxp->attachLight(sllxp);

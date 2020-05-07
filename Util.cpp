@@ -3,11 +3,13 @@
 #include "Generator.h"
 #include <SOIL2/SOIL2.h>
 #include <glm/gtc/type_ptr.hpp>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <fstream>
+#include <random>
 
 GLuint LineDrawer::vaoLn[1]={0};
 GLuint LineDrawer::shader=0;
@@ -193,6 +195,8 @@ GLuint Util::createShaderProgram(	const char* vp, const char* fp,
 		return program;
 	else
 	{
+		printf("error in program vs:%s, fs:%s, tcs:%s, tes:%s, gs:%s\n",
+		       vp,fp,(!!tCS?tCS:"NULL"), (!!tES?tES:"NULL"),(!!gp?gp:"NULL"));
 		Util::printProgramLog(program);
 		glDeleteProgram(program);
 		glDeleteShader(vShader);
@@ -458,3 +462,29 @@ ShaderPair::operator bool() const
 	return renderProgram || shadowProgram;
 }
 
+#define  IDX(X,Y,Z)   (X*(sx*sy)+Y*(sy)+Z)
+#define TIDX(X,Y,Z,C) (4*IDX(X,Y,Z)+C)
+GLuint NoiseTexturesGen::genNoiseTex(int seed, int sx, int sy, int sz)
+{
+	GLubyte* texData = (GLubyte*) malloc(sx*sy*sz*4*sizeof(*texData));
+	double*    noise = (double*) malloc(sx*sy*sz*sizeof(*noise));
+	std::default_random_engine gen{(unsigned int)seed};
+	std::uniform_real_distribution<double> d{0,1};
+
+	for (int x = 0;x<sx;++x)
+		for (int y = 0;y<sy;++y)
+			for (int z = 0;z<sz;++z)
+//				noise[IDX(x,y,z)]=gen(d);
+
+	double zoom=1;
+	for (unsigned int x = 0;x<sx;++x)
+		for (unsigned int y = 0;y<sy;++y)
+			for (unsigned int z = 0;z<sz;++z)
+			{
+				
+			}
+
+	return 0;
+}
+#undef IDX
+#undef TIDX
