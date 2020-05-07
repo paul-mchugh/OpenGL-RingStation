@@ -1,6 +1,7 @@
 #version 430
 
 uniform bool dMapEn;
+uniform vec3 user_mv_pos;
 uniform mat4 mv_matrix;
 uniform mat4 proj_matrix;
 uniform mat4 norm_matrix;
@@ -31,13 +32,13 @@ void main(void)
 	if(gl_InvocationID==0)
 	{
 		float div=16;
-		float lodDist=50;
+		float lodDist=100;
 
 		mat4 mvp = mv_matrix;
-		vec3 p0 = vec3(mvp * vec4(pos_TCS[0],1.0));
-		vec3 p1 = vec3(mvp * vec4(pos_TCS[1],1.0));
-		vec3 p2 = vec3(mvp * vec4(pos_TCS[2],1.0));
-		vec3 p3 = vec3(mvp * vec4(pos_TCS[3],1.0));
+		vec3 p0 = vec3(mvp * vec4(pos_TCS[0]-user_mv_pos,1.0));
+		vec3 p1 = vec3(mvp * vec4(pos_TCS[1]-user_mv_pos,1.0));
+		vec3 p2 = vec3(mvp * vec4(pos_TCS[2]-user_mv_pos,1.0));
+		vec3 p3 = vec3(mvp * vec4(pos_TCS[3]-user_mv_pos,1.0));
 		float lheight = min(length(p2.xyz),length(p0.xyz));
 		float rheight = min(length(p3.xyz),length(p1.xyz));
 		float twidth  = min(length(p3.xyz),length(p2.xyz));

@@ -1,6 +1,7 @@
 #version 430
 
 uniform bool dMapEn;
+uniform vec3 user_mv_pos;
 uniform mat4 mv_matrix;
 uniform mat4 proj_matrix;
 uniform mat4 norm_matrix;
