@@ -48,6 +48,7 @@ uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D samp;
 layout (binding=1) uniform sampler2D depthMap;
 layout (binding=2) uniform sampler2D normalMap;
+uniform vec2 shadNF;
 uniform mat4 shadMVP[MAX_LIGHTS];
 uniform sampler2DShadow flats[MAX_LIGHTS];
 uniform samplerCubeShadow cubes[MAX_LIGHTS];
@@ -83,15 +84,16 @@ float computeCubeShadow(int i)
 {
 	//formula for depth from:
 	//https://stackoverflow.com/questions/48654578/omnidirectional-lighting-in-opengl-glsl-4-1
+/*
 	float n=0.1,f=1000;
 	float ndiff = f-n;
-	float near  = (f+n)/ndiff*0.5+0.5;
-	float far   =-(f*n)/ndiff;
-
+	float near  = (f+n)/ndiff*0.5+0.5;	//stored in shadNF[0]
+	float far   =-(f*n)/ndiff;			//stored in shadNF[1]
+*/
 	vec3 L = shadowCoord[i].xyz;
 	vec3 absL = abs(L);
 	float z = max(absL.x,max(absL.y,absL.z));
-	float d = near + far /z;
+	float d = shadNF[0] + shadNF[1] /z;
 
 	return texture(cubes[i], vec4(L,d));
 }

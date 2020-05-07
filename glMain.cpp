@@ -32,6 +32,7 @@ void setupScene(void);
 glm::mat4 compPerspective(float fov, float aspect, float near, float far, float IOD, float lr);
 void handleKeys(GLFWwindow* window, double time);
 void handleUserLight();
+glm::vec2 calcNFVector(float nearClipPlane, float farClipPlane);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void scroll_callback(GLFWwindow* window, double xScrOff, double yScrOff);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
@@ -53,6 +54,7 @@ float initialPitch=-25.0f;
 float initialPan=-50.0f;
 glm::vec3 initialLightLOC(-64.67,13.27,-40.90);
 glm::vec3 initialLightDIR(-0.04,-0.38,-0.92);
+glm::vec2 shadowNFVec{0};
 ShaderPair renderingPrograms;
 ShaderPair renderingProgramsTess;
 Camera c;
@@ -74,7 +76,7 @@ int main()
 	if(glewInit() != GLEW_OK) exit(1);
 	glfwSwapInterval(1);
 
-	glEnable(GL_DEBUG_OUTPUT);
+//	glEnable(GL_DEBUG_OUTPUT);
 	//gl debug
 	if(GLEW_ARB_debug_output)
 		glDebugMessageCallbackARB(&DebugCB, NULL);
@@ -171,6 +173,7 @@ void display(GLFWwindow* window, double currentTime)
 		//set eye specific uniforms/settings
 		if(anaMode==AnaglyphMode::OFF||viewMap!=-1)
 		{
+			shadowNFVec = calcNFVector(0.1f, 1000.0f);
 			pMat = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 1000.0f);
 			vMat = c.getTransform();
 			invvMat = glm::transpose(glm::inverse(vMat));
@@ -178,6 +181,7 @@ void display(GLFWwindow* window, double currentTime)
 		}
 		else
 		{
+			shadowNFVec = calcNFVector(0.5f, 150.0f);
 			float lr = i*2-1;
 			pMat = compPerspective(glm::radians(60.0f), aspect, 0.5, 150,lr,IOD);
 			vMat = c.getTransform(lr*IOD/2);
@@ -206,6 +210,8 @@ void display(GLFWwindow* window, double currentTime)
 		glUniformMatrix4fv(invvHandleR, 1, GL_FALSE, glm::value_ptr(invvMat));
 		GLuint projHandleR = glGetUniformLocation(renderingPrograms.renderProgram, "proj_matrix");
 		glUniformMatrix4fv(projHandleR, 1, GL_FALSE, glm::value_ptr(pMat));
+		GLuint shadNFR = glGetUniformLocation(renderingPrograms.renderProgram, "shadNF");
+		glUniform2fv(shadNFR, 1, glm::value_ptr(shadowNFVec));
 		wld.glTransferLights(vMat, renderingPrograms.renderProgram, "lights");
 		//send the uniforms to the GPU
 		glUseProgram(renderingProgramsTess.renderProgram);
@@ -213,6 +219,8 @@ void display(GLFWwindow* window, double currentTime)
 		glUniformMatrix4fv(invvHandleRT, 1, GL_FALSE, glm::value_ptr(invvMat));
 		GLuint projHandleRT=glGetUniformLocation(renderingProgramsTess.renderProgram, "proj_matrix");
 		glUniformMatrix4fv(projHandleRT, 1, GL_FALSE, glm::value_ptr(pMat));
+		GLuint shadNFRT = glGetUniformLocation(renderingProgramsTess.renderProgram, "shadNF");
+		glUniform2fv(shadNFRT, 1, glm::value_ptr(shadowNFVec));
 		wld.glTransferLights(vMat, renderingProgramsTess.renderProgram, "lights");
 
 		//invoke draw
@@ -260,7 +268,7 @@ void setupScene(void)
 	userlight ={.ambient=glm::vec4{0.05,0.05,0.05,1}, .diffuse=glm::vec4{0.7,0.7,0.7,1},
 	            .specular=glm::vec4{0.8,0.8,0.8,1},.direction=initialLightDIR,
 	            .cutoff=glm::radians(35.0f),.exponent=30,
-	            .enabled=true,.type=LightType::SPOTLIGHT};
+	            .enabled=true,.type=LightType::POSITIONAL};
 	Light sllzp{.ambient=glm::vec4{0,0,0,1}, .diffuse=glm::vec4{1,1,1,1},
 	            .specular=glm::vec4{0.5,0.5,0.5,1},.direction=glm::vec4{ 0,0, 1,1},
 	            .cutoff=glm::radians(22.5f),.exponent=30,
@@ -366,6 +374,15 @@ void handleUserLight()
 		iLight->attachLight(userlight);
 		iLight->overrideAbsPos(c.getPos()+glm::normalize(userlight.direction));
 	}
+}
+
+glm::vec2 calcNFVector(float nearClipPlane, float farClipPlane)
+{
+	float n=nearClipPlane,f=farClipPlane;
+	float ndiff = f-n;
+	float near  = (f+n)/ndiff*0.5+0.5;
+	float far   =-(f*n)/ndiff;
+	return glm::vec2{near, far};
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
