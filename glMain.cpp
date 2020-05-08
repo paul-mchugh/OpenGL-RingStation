@@ -20,7 +20,8 @@ enum AnaglyphMode
 
 //globals consts
 const float rotateMagnitude = 30;
-const float moveMagnitude = 10;
+const float moveMagnitude   = 10;
+const double fadeRatePerSec = 0.2;
 const float spotOff = 5;
 const float IOD = 0.02f;
 const char* const modeToStr[]={"Off","Red-Cyan","Green-Purple"};
@@ -31,7 +32,7 @@ void display(GLFWwindow* window, double currentTime);
 void setupScene(void);
 glm::mat4 compPerspective(float fov, float aspect, float near, float far, float IOD, float lr);
 void handleKeys(GLFWwindow* window, double time);
-void handleUserLight();
+void handleUserLight(double tdiff);
 glm::vec2 calcNFVector(float nearClipPlane, float farClipPlane);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void scroll_callback(GLFWwindow* window, double xScrOff, double yScrOff);
@@ -65,6 +66,7 @@ Object* iLight;
 bool  grabbedLight=false;
 float fadeLevel=1.0;
 Light userlight;
+GLuint noiseTex;
 
 int main()
 {
@@ -103,10 +105,12 @@ void init(GLFWwindow* window)
 		ShaderPair{Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl",
 		                                     "modTcsShader.glsl",  "modTesShader.glsl"),
 		           Util::createShaderProgram("shadVertShader.glsl", "shadFragShader.glsl",
-		                                     "shadTcsShader.glsl",    "shadTesShader.glsl"),
+		                                     "shadTcsShader.glsl",  "shadTesShader.glsl"),
 		           true,true};
 	renderingPrograms =
-		ShaderPair{Util::createShaderProgram("modVertShaderNT.glsl",  "modFragShader.glsl"),
+		ShaderPair{Util::createShaderProgram("modVertShaderNT.glsl",  "modFragShader.glsl",
+		                                     NULL, NULL,
+		                                     "modGeomShader.glsl"),
 		           Util::createShaderProgram("shadVertShaderNT.glsl", "shadFragShader.glsl")};
 	if(!renderingPrograms) printf("Could not Load shader\n");
 	glfwSetKeyCallback(window, key_callback);
@@ -133,7 +137,7 @@ void display(GLFWwindow* window, double currentTime)
 	double timeDiff=currentTime-lastTime;
 	//handle keyboard input
 	handleKeys(window, timeDiff);
-	handleUserLight();
+	handleUserLight(timeDiff);
 	//update the objects if not paused
 	if(!paused)
 		wld.update(timeDiff);
@@ -223,6 +227,10 @@ void display(GLFWwindow* window, double currentTime)
 		glUniform2fv(shadNFRT, 1, glm::value_ptr(shadowNFVec));
 		wld.glTransferLights(vMat, renderingProgramsTess.renderProgram, "lights");
 
+		//send the noise texture
+		glActiveTexture(GL_TEXTURE3);
+		glBindTexture(GL_TEXTURE_3D, noiseTex);
+
 		//invoke draw
 		wld.draw(vMat);
 	}
@@ -243,14 +251,18 @@ void setupScene(void)
 	//build skybox
 	sbox=Skybox("img/skybox");
 
-	//model data
-//	GLuint sunTexture      = Util::loadTexture("img/sun_euv.png");
-//	GLuint marsTexture     = Util::loadTexture("img/mars.jpg");
-//	GLuint europaTexture   = Util::loadTexture("img/europa.jpg");
+	//model textures nice ones
 	GLuint ringWldTexture  = Util::loadTexture("img/rw_texture.png");
 	GLuint ringWldDepthMap = Util::loadTexture("img/rw_depth.png");
 	GLuint ringWldNormMap  = Util::loadTexture("img/rw_norm.png");
-//	GLuint earthTexture    = Util::loadTexture("img/earth.jpg");
+	//model textures fallback ones
+//	GLuint ringWldTexture  = Util::loadTexture("img/rw_test.png");
+//	GLuint ringWldDepthMap = Util::loadTexture("img/rw_test_depth.png");
+//	GLuint ringWldNormMap  = Util::loadTexture("img/rw_test_norm.png");
+
+	//generate noise texture
+	noiseTex = NoiseTexturesGen::genNoiseTex();
+
 	GLuint shuttleTexture  = Util::loadTexture("img/spstob_1.jpg");
 
 	//habitat internal region is height=habwidth, width=2*pi*(1-wallThick)
@@ -366,8 +378,15 @@ void handleKeys(GLFWwindow* window, double time)
 
 #undef GK
 
-void handleUserLight()
+void handleUserLight(double tdiff)
 {
+	double fadeAmt=tdiff*fadeRatePerSec;
+
+	if(!userlight.enabled && fadeLevel>0)
+		fadeLevel-=fadeAmt;
+	else if(userlight.enabled && fadeLevel<1)
+		fadeLevel+=fadeAmt;
+	iLight->setFadeLvl(fadeLevel);
 	if(grabbedLight)
 	{
 		userlight.direction=-c.getDir();
@@ -418,6 +437,11 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		userlight.enabled= !userlight.enabled;
 		iLight->attachLight(userlight);
 		printf("Pressed key   T: Light toggled %s\n",(userlight.enabled?"On":"Off"));
+		if(!userlight.enabled && grabbedLight)
+		{
+			printf("Dropping disabled light\n");
+			grabbedLight = false;
+		}
 	}
 	else if(key == GLFW_KEY_G && action == GLFW_PRESS)
 	{
@@ -461,6 +485,12 @@ void scroll_callback(GLFWwindow* window, double xScrOff, double yScrOff)
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
+	if(!userlight.enabled)
+	{
+		printf("You can't pick up a disabled light\n");
+		grabbedLight = false;
+		return;
+	}
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
 	{
 		grabbedLight=!grabbedLight;

@@ -47,29 +47,33 @@ uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D samp;
 layout (binding=1) uniform sampler2D depthMap;
 layout (binding=2) uniform sampler2D normalMap;
+layout (binding=3) uniform sampler3D noiseMap;
+uniform float fadeLvl;
 uniform vec2 shadNF;
 uniform mat4 shadMVP[MAX_LIGHTS];
 uniform sampler2DShadow flats[MAX_LIGHTS];
 uniform samplerCubeShadow cubes[MAX_LIGHTS];
 
-out vec3 varyingLightDir[MAX_LIGHTS];
-out vec3 varyingHalfVec [MAX_LIGHTS];
-out vec4 shadowCoord[MAX_LIGHTS];
-out vec3 varyingVPos;
-out vec2 varyingTc;
-out vec3 varyingNorm;
-out vec3 varyingTan;
+out vec3 varyingLightDirG[MAX_LIGHTS];
+out vec3 varyingHalfVecG [MAX_LIGHTS];
+out vec4 shadowCoordG[MAX_LIGHTS];
+out vec3 varyingMPosG;
+out vec3 varyingVPosG;
+out vec2 varyingTcG;
+out vec3 varyingNormG;
+out vec3 varyingTanG;
 
 void main(void)
 {
 	//set position and pass it through to the shader
 	vec4 wsVertPos  = mv_matrix*vec4(position,1.0);
-	varyingVPos = wsVertPos.xyz;
-	gl_Position = proj_matrix * wsVertPos;
+	varyingMPosG = position;
+	varyingVPosG = wsVertPos.xyz;
+	gl_Position  = proj_matrix * wsVertPos;
 
 	//compute norm and pass it through
-	varyingNorm = (norm_matrix * vec4(norm,1.0)).xyz;
-	varyingTan  = (norm_matrix * vec4(tan, 1.0)).xyz;
+	varyingNormG = (norm_matrix * vec4(norm,1.0)).xyz;
+	varyingTanG  = (norm_matrix * vec4(tan, 1.0)).xyz;
 
 	//pass compute and pass each light direction
 	for(int i=0;i<MAX_LIGHTS;++i)
@@ -78,24 +82,24 @@ void main(void)
 		switch(l.type)
 		{
 		case POSITIONAL:
-			varyingLightDir[i] = l.position-varyingVPos;
-			shadowCoord[i] = vec4(vec3(shadMVP[i]*vec4(position,1.0))-l.absPosition,1);
+			varyingLightDirG[i] = l.position-varyingVPosG;
+			shadowCoordG[i] = vec4(vec3(shadMVP[i]*vec4(position,1.0))-l.absPosition,1);
 			break;
 		case SPOTLIGHT:
-			varyingLightDir[i] = l.position-varyingVPos;
-			shadowCoord[i] = shadMVP[i] * vec4(position,1.0);
+			varyingLightDirG[i] = l.position-varyingVPosG;
+			shadowCoordG[i] = shadMVP[i] * vec4(position,1.0);
 		break;
 		case DIRECTIONAL:
-			varyingLightDir[i] = (-(invv_matrix*vec4(l.direction,1))).xyz;
-			shadowCoord[i] = shadMVP[i] * vec4(position,1.0);
+			varyingLightDirG[i] = (-(invv_matrix*vec4(l.direction,1))).xyz;
+			shadowCoordG[i] = shadMVP[i] * vec4(position,1.0);
 			break;
 		case AMBIENT:
 		case NO_LIGHT:
 			break;
 		}
-		varyingHalfVec[i] = normalize(varyingLightDir[i]) - normalize(varyingVPos);
+		varyingHalfVecG[i] = normalize(varyingLightDirG[i]) - normalize(varyingVPosG);
 	}
 
 	//pass the texture coordinates
-	varyingTc = tc;
+	varyingTcG = tc;
 }

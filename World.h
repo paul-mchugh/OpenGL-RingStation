@@ -55,7 +55,6 @@ class World
 	glm::mat4 vpMats[MAX_LIGHTS];
 	GLuint shadowTextures[MAX_LIGHTS];
 	void replaceLight(Light lNew, GLuint indx);
-
 public:
 	glm::vec3 bgColor;
 	Light ambient;
@@ -83,6 +82,7 @@ private:
 	GLuint vbo[5];
 	std::vector<int> children;
 	GLint lightIndx = -1;
+	GLfloat fadeLvl;
 	PosType posType;
 	double scale;
 	union PositionData
@@ -138,6 +138,7 @@ public:
 	void overrideAbsPos(glm::vec3 newPos);
 	void attachDepthMap(GLuint depthMap);
 	void attachNormalMap(GLuint normalMap);
+	void setFadeLvl(double fadeLvl);
 };
 
 #endif

@@ -48,6 +48,8 @@ uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D samp;
 layout (binding=1) uniform sampler2D depthMap;
 layout (binding=2) uniform sampler2D normalMap;
+layout (binding=3) uniform sampler3D noiseMap;
+uniform float fadeLvl;
 uniform vec2 shadNF;
 uniform mat4 shadMVP[MAX_LIGHTS];
 uniform sampler2DShadow flats[MAX_LIGHTS];
@@ -56,6 +58,7 @@ uniform samplerCubeShadow cubes[MAX_LIGHTS];
 in vec3 varyingLightDir[MAX_LIGHTS];
 in vec3 varyingHalfVec [MAX_LIGHTS];
 in vec4 shadowCoord[MAX_LIGHTS];
+in vec3 varyingMPos;
 in vec3 varyingVPos;
 in vec2 varyingTc;
 in vec3 varyingNorm;
@@ -175,5 +178,5 @@ void main(void)
 		diffWSum   * material.diffuse.xyz+
 		specWSum   * material.specular.xyz;
 	color = vec4(lightV,1) * (texEn ? texture(samp,varyingTc) : vec4(1));
-//	color = vec4(length(lightV)>0.05?1.0f:0.0f,0,1,1);
+//	color = texture(noiseMap, varyingMPos/2.0+0.5);
 }

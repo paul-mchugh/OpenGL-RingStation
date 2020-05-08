@@ -48,6 +48,8 @@ uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D samp;
 layout (binding=1) uniform sampler2D depthMap;
 layout (binding=2) uniform sampler2D normalMap;
+layout (binding=3) uniform sampler3D noiseMap;
+uniform float fadeLvl;
 uniform vec2 shadNF;
 uniform mat4 shadMVP[MAX_LIGHTS];
 uniform sampler2DShadow flats[MAX_LIGHTS];
@@ -63,6 +65,7 @@ in vec3 tan_TES[];
 out vec3 varyingLightDir[MAX_LIGHTS];
 out vec3 varyingHalfVec [MAX_LIGHTS];
 out vec4 shadowCoord[MAX_LIGHTS];
+out vec3 varyingMPos;
 out vec3 varyingVPos;
 out vec2 varyingTc;
 out vec3 varyingNorm;
@@ -87,9 +90,9 @@ void computeNewVectors(vec3 oldNorm, vec3 oldTan)
 	//compute new tangent space vectors
 	//vectors for the quad.  We will use them to build a TBN matrix to
 	//transform the varyingNorm, and varyingTan to model model space
-	vec3   tan  = normalize(pos_TES[1] - pos_TES[0]);
-	vec3 bitan  = normalize(pos_TES[2] - pos_TES[0]);
-	vec3  norm  = normalize(cross(tan, bitan));
+	vec3   tan   = normalize(pos_TES[1] - pos_TES[0]);
+	vec3 bitan   = normalize(pos_TES[2] - pos_TES[0]);
+	vec3  norm   = normalize(cross(tan, bitan));
 	varyingNorm = (norm_matrix * vec4(oldNorm,1.0)).xyz;
 	varyingTan  = (norm_matrix * vec4(oldTan, 1.0)).xyz;
 }
@@ -115,7 +118,8 @@ void main(void)
 
 	//set position and pass it through to the shader
 	varyingVPos = wsVertPos.xyz;
-	gl_Position = proj_matrix * wsVertPos;
+	varyingMPos = position;
+	gl_Position  = proj_matrix * wsVertPos;
 
 	//pass compute and pass each light direction
 	for(int i=0;i<MAX_LIGHTS;++i)

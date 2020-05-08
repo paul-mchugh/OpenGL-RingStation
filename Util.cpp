@@ -138,6 +138,7 @@ GLuint Util::createShader(GLenum type, const char* path)
 	}
 	else
 	{
+		printf("error in shader: %s\n",path);
 		Util::printShaderLog(shaderID);
 		glDeleteShader(shaderID);
 		return 0;
@@ -467,24 +468,81 @@ ShaderPair::operator bool() const
 GLuint NoiseTexturesGen::genNoiseTex(int seed, int sx, int sy, int sz)
 {
 	GLubyte* texData = (GLubyte*) malloc(sx*sy*sz*4*sizeof(*texData));
-	double*    noise = (double*) malloc(sx*sy*sz*sizeof(*noise));
+	double*    noise = (double*)  malloc(sx*sy*sz*sizeof(*noise));
 	std::default_random_engine gen{(unsigned int)seed};
-	std::uniform_real_distribution<double> d{0,1};
+	std::uniform_real_distribution<double> d;
 
 	for (int x = 0;x<sx;++x)
 		for (int y = 0;y<sy;++y)
 			for (int z = 0;z<sz;++z)
-//				noise[IDX(x,y,z)]=gen(d);
+				noise[IDX(x,y,z)]=d(gen);
 
-	double zoom=1;
-	for (unsigned int x = 0;x<sx;++x)
-		for (unsigned int y = 0;y<sy;++y)
-			for (unsigned int z = 0;z<sz;++z)
+	for (int i=0;i<sx*sy*sz*4*sizeof(*texData);++i)
+		texData[i]=0;
+
+	double maxZoom=32;
+	unsigned int maxZoomI = (unsigned int)maxZoom;
+	for(double zoom=maxZoom;zoom>=1;zoom/=2)
+	{
+		unsigned int iZoom = (unsigned int)zoom;
+		for (unsigned int x = 0;x<sx;++x)
+			for (unsigned int y = 0;y<sy;++y)
+				for (unsigned int z = 0;z<sz;++z)
+				{
+					double dx=x/zoom,dy=y/zoom,dz=z/zoom;
+					unsigned int nx=dx, ny=dy, nz=dz;
+					double fracXp = dx - glm::floor(dx);
+					double fracYp = dy - glm::floor(dy);
+					double fracZp = dz - glm::floor(dz);
+					double fracXm = (1-fracXp);
+					double fracYm = (1-fracYp);
+					double fracZm = (1-fracZp);
+					unsigned int px = (nx+sx+1)%sx;
+					unsigned int py = (ny+sy+1)%sy;
+					unsigned int pz = (nz+sz+1)%sz;
+
+					double val = 0.0;
+					val += fracXm * fracYm * fracZm * noise[IDX(nx,ny,nz)];
+					val += fracXm * fracYp * fracZm * noise[IDX(nx,py,nz)];
+					val += fracXp * fracYm * fracZm * noise[IDX(px,ny,nz)];
+					val += fracXp * fracYp * fracZm * noise[IDX(px,py,nz)];
+					val += fracXm * fracYm * fracZp * noise[IDX(nx,ny,pz)];
+					val += fracXm * fracYp * fracZp * noise[IDX(nx,py,pz)];
+					val += fracXp * fracYm * fracZp * noise[IDX(px,ny,pz)];
+					val += fracXp * fracYp * fracZp * noise[IDX(px,py,pz)];
+					unsigned int res = (unsigned int)(val * 255);
+					texData[TIDX(x,y,z,0)]+=res*iZoom;
+					texData[TIDX(x,y,z,1)]+=res*iZoom;
+					texData[TIDX(x,y,z,2)]+=res*iZoom;
+				}
+	}
+
+	//rescale pass
+	for (int x = 0;x<sx;++x)
+		for (int y = 0;y<sy;++y)
+			for (int z = 0;z<sz;++z)
 			{
-				
+				unsigned int v = 128 * texData[TIDX(x,y,z,0)] / maxZoomI;
+				texData[x,y,z,0]=(GLubyte)v;
+				texData[x,y,z,1]=(GLubyte)v;
+				texData[x,y,z,2]=(GLubyte)v;
+				texData[x,y,z,3]=255;
 			}
 
-	return 0;
+	//create texture
+	GLuint texID;
+	glGenTextures(1, &texID);
+	glBindTexture(GL_TEXTURE_3D, texID);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexStorage3D(GL_TEXTURE_3D, 1, GL_RGBA8, sx, sy, sz);
+	glTexSubImage3D(GL_TEXTURE_3D, 0, 0,0,0, sx,sy,sz,
+	                GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, texData);
+
+	//free memory
+	free(noise);
+	free(texData);
+
+	return texID;
 }
 #undef IDX
 #undef TIDX

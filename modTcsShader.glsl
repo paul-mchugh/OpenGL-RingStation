@@ -48,6 +48,8 @@ uniform mat4 norm_matrix;
 layout (binding=0) uniform sampler2D samp;
 layout (binding=1) uniform sampler2D depthMap;
 layout (binding=2) uniform sampler2D normalMap;
+layout (binding=3) uniform sampler3D noiseMap;
+uniform float fadeLvl;
 uniform vec2 shadNF;
 uniform mat4 shadMVP[MAX_LIGHTS];
 uniform sampler2DShadow flats[MAX_LIGHTS];

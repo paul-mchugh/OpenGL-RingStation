@@ -597,6 +597,8 @@ void Object::drawAction(std::stack<glm::mat4>& mstack)
 	glProgramUniform1i(rShader, dMapEnHandle, !!depthMap);
 	GLuint nMapEnHandle = glGetUniformLocation(rShader, "nMapEn");
 	glProgramUniform1i(rShader, nMapEnHandle, !!normalMap);
+	GLuint fadeLvlHandle = glGetUniformLocation(rShader, "fadeLvl");
+	glProgramUniform1f(rShader, fadeLvlHandle, fadeLvl);
 	//calculate and send the shadow MVP matrices to the GPU
 	for(int i=0; i<World::MAX_LIGHTS; ++i)
 	{
@@ -731,4 +733,9 @@ void Object::attachDepthMap(GLuint depthMap)
 void Object::attachNormalMap(GLuint normalMap)
 {
 	this->normalMap = normalMap;
+}
+
+void Object::setFadeLvl(double fadeLvl)
+{
+	this->fadeLvl = fadeLvl;
 }
