@@ -50,10 +50,10 @@ GLint viewMap = -1;
 GLint viewFace = 0;
 double lastTime=0;
 AnaglyphMode anaMode=AnaglyphMode::OFF;
-glm::vec3 initialCameraLOC(-90.21,21.44,-19.81);
-float initialPitch=-25.0f;
-float initialPan=-50.0f;
-glm::vec3 initialLightLOC(-64.67,13.27,-40.90);
+glm::vec3 initialCameraLOC(45,7.44,45);
+float initialPitch=0.0f;
+float initialPan=-135.0f;
+glm::vec3 initialLightLOC(66.45,4.27,66.45);
 glm::vec3 initialLightDIR(-0.04,-0.38,-0.92);
 glm::vec2 shadowNFVec{0};
 ShaderPair renderingPrograms;
@@ -104,9 +104,11 @@ void init(GLFWwindow* window)
 	renderingProgramsTess =
 		ShaderPair{Util::createShaderProgram("modVertShader.glsl", "modFragShader.glsl",
 		                                     "modTcsShader.glsl",  "modTesShader.glsl"),
-		           Util::createShaderProgram("shadVertShader.glsl", "shadFragShader.glsl",
-		                                     "shadTcsShader.glsl",  "shadTesShader.glsl"),
-		           true,true};
+		           Util::createShaderProgram("shadVertShaderNT.glsl", "shadFragShader.glsl"),
+		           true};
+//		           Util::createShaderProgram("shadVertShader.glsl", "shadFragShader.glsl",
+//		                                     "shadTcsShader.glsl",  "shadTesShader.glsl"),
+//		           true,true};
 	renderingPrograms =
 		ShaderPair{Util::createShaderProgram("modVertShaderNT.glsl",  "modFragShader.glsl",
 		                                     NULL, NULL,
@@ -277,7 +279,7 @@ void setupScene(void)
 	Material silver = Material::getSilver();
 	Material   gold = Material::getGold();
 
-	userlight ={.ambient=glm::vec4{0.05,0.05,0.05,1}, .diffuse=glm::vec4{0.7,0.7,0.7,1},
+	userlight ={.ambient=glm::vec4{0.05,0.05,0.05,1}, .diffuse=glm::vec4{1,1,1,1},
 	            .specular=glm::vec4{0.8,0.8,0.8,1},.direction=initialLightDIR,
 	            .cutoff=glm::radians(35.0f),.exponent=30,
 	            .enabled=true,.type=LightType::POSITIONAL};
@@ -322,11 +324,15 @@ void setupScene(void)
 	Object* ringHab =
 		Object::makeAbsolute(&wld, rh, renderingProgramsTess, ringWldTexture, canvas, 100,
 		                     glm::vec3{0,0,0},
-		                     glm::vec3{0,1,0}, 60, 0);
-	Object* shuttle =
+		                     glm::vec3{0,1,0}, 60, 0.72);
+	Object* shuttle1 =
 		Object::makeAbsolute(&wld, shu, renderingPrograms, shuttleTexture, canvas, 2,
-		                     glm::vec3{-65.99,5.63,-60.51},
+		                     glm::vec3{69.48,3,64.79},
 		                     glm::vec3{-1,0,0   }, 10, 0.25);
+	Object* shuttle2 =
+		Object::makeAbsolute(&wld, shu, renderingPrograms, shuttleTexture, canvas, 2,
+		                     glm::vec3{64.79,3,69.48},
+		                     glm::vec3{ 1,0,0   }, 10, 0.25);
 
 	//add maps
 	ringHab->attachDepthMap(ringWldDepthMap);
@@ -342,8 +348,6 @@ void setupScene(void)
 	                 .specular=glm::vec4{1,1,1,1},.direction=glm::vec3{-0.96,-0.23,-0.14},
 	                 .enabled=true,.type=LightType::DIRECTIONAL};
 	wld.ambient={.ambient=glm::vec4{0.2,0.2,0.2,1},.enabled=true,.type=LightType::AMBIENT};
-
-	ringHab->addChild(*shuttle);
 }
 
 glm::mat4

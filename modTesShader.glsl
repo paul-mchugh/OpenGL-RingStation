@@ -113,7 +113,7 @@ void main(void)
 	if(dMapEn)
 	{
 		wsVertPos += vec4(normalize(varyingNorm)*texture(depthMap,tc).r,0);
-		computeNewVectors(norm, tan);
+//		computeNewVectors(norm, tan);
 	}
 
 	//set position and pass it through to the shader

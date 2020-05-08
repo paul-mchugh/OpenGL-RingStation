@@ -82,7 +82,7 @@ private:
 	GLuint vbo[5];
 	std::vector<int> children;
 	GLint lightIndx = -1;
-	GLfloat fadeLvl;
+	GLfloat fadeLvl = 1;
 	PosType posType;
 	double scale;
 	union PositionData
