@@ -1,6 +1,6 @@
 #version 430
 
-#define MAX_LIGHTS 10
+#define MAX_LIGHTS  7
 #define NO_LIGHT    0
 #define AMBIENT     1
 #define POSITIONAL  2

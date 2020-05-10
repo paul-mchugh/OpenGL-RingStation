@@ -23,7 +23,7 @@ const float rotateMagnitude = 30;
 const float moveMagnitude   = 10;
 const double fadeRatePerSec = 0.2;
 const float spotOff = 5;
-const float IOD = 0.02f;
+const float IOD = 0.04f;
 const char* const modeToStr[]={"Off","Red-Cyan","Green-Purple"};
 
 //forward declarations

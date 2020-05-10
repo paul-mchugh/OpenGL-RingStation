@@ -5,7 +5,7 @@ layout (location=1) in vec2 tc;
 layout (location=2) in vec3 norm;
 layout (location=3) in vec3 tan;
 
-#define MAX_LIGHTS 10
+#define MAX_LIGHTS  7
 #define NO_LIGHT    0
 #define AMBIENT     1
 #define POSITIONAL  2
