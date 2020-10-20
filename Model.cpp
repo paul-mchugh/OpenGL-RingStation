@@ -1,5 +1,7 @@
 #include <fstream>
-#include <sstream>
+#include <string>
+#include <regex>
+#include <cstdlib>
 #include "Model.h"
 
 int Model::getNumVertices() { return numVertices; }
@@ -10,59 +12,60 @@ std::vector<glm::vec2> Model::getTexCoords() { return texCoords; }
 std::vector<glm::vec3> Model::getNormals() { return normals; }
 std::vector<glm::vec3> Model::getTangents() { return tangents; }
 
-Model ModelImporter::parseOBJ(const char* filePath) {
-	using namespace std;
+//this model importer only imports .obj tiles that consist exclusively of triangles
+Model ModelImporter::parseOBJ(const char* filePath)
+{
 	Model m;
-	std::vector<float> vertVals, stVals, normVals;
-	float x, y, z;
-	string content;
-	ifstream fileStream(filePath, ios::in);
-	string line = "";
-	while (!fileStream.eof()) {
-		getline(fileStream, line);
-		if (line.compare(0, 2, "v ") == 0) {
-			stringstream ss(line.erase(0, 1));
-			ss >> x; ss >> y; ss >> z;
-			vertVals.push_back(x);
-			vertVals.push_back(y);
-			vertVals.push_back(z);
+	std::vector<glm::vec3> vertices, normals;
+	std::vector<glm::vec2> texCoords;
+
+	std::ifstream modelFile(filePath);
+	std::string line;
+	std::regex  vtxLn{"^v\\s+"};
+	std::regex  texLn{"^vt\\s+"};
+	std::regex normLn{"^vn\\s+"};
+	std::regex faceLn{"^f\\s+(\\d+)\\/(\\d+)\\/(\\d+)\\s+(\\d+)\\/(\\d+)\\/(\\d+)\\s+(\\d+)\\/(\\d+)\\/(\\d+)"};
+
+	std::smatch m2;
+	std::string test="f 8021/4274/8291 8023/4276/8291 8022/4275/8291";
+	std::regex_search(test, m2, faceLn);
+
+	//read each line
+	for(std::getline(modelFile,line); !modelFile.eof(); std::getline(modelFile,line))
+	{
+		//variables for matches of the lines
+		std::smatch match;
+		char* text = const_cast<char*>(line.c_str())+2;
+
+		if(std::regex_search(line, match, vtxLn))
+		{
+			double x{strtod(text, &text)}, y{strtod(text, &text)}, z{strtod(text, &text)};
+			vertices.push_back(glm::vec3{x,y,z});
 		}
-		if (line.compare(0, 2, "vt") == 0) {
-			stringstream ss(line.erase(0, 2));
-			ss >> x; ss >> y;
-			stVals.push_back(x);
-			stVals.push_back(y);
+		else if(std::regex_search(line, match, texLn))
+		{
+			double s{strtod(text, &text)}, t{strtod(text, &text)};
+			texCoords.push_back(glm::vec2{s,t});
 		}
-		if (line.compare(0, 2, "vn") == 0) {
-			stringstream ss(line.erase(0, 2));
-			ss >> x; ss >> y; ss >> z;
-			normVals.push_back(x);
-			normVals.push_back(y);
-			normVals.push_back(z);
+		else if(std::regex_search(line, match, normLn))
+		{
+			double x{strtod(text, &text)}, y{strtod(text, &text)}, z{strtod(text, &text)};
+			normals.push_back(glm::vec3{x,y,z});
 		}
-		if (line.compare(0, 2, "f ") == 0) {
-			string oneCorner, v, t, n;
-			stringstream ss(line.erase(0, 2));
-			for (int i = 0; i < 3; i++) {
-				getline(ss, oneCorner, ' ');
-				stringstream oneCornerSS(oneCorner);
-				getline(oneCornerSS, v, '/');
-				getline(oneCornerSS, t, '/');
-				getline(oneCornerSS, n, '/');
-
-				int vertRef = (stoi(v) - 1) * 3;
-				int tcRef = (stoi(t) - 1) * 2;
-				int normRef = (stoi(n) - 1) * 3;
-
-				m.vertices.push_back(glm::vec3{vertVals[vertRef+0], vertVals[vertRef+1],
-				                               vertVals[vertRef+2]});
-
-				m.texCoords.push_back(glm::vec2{stVals[tcRef],stVals[tcRef+1]});
-
-				m.normals.push_back(glm::vec3{normVals[normRef+0], normVals[normRef+1],
-				                              normVals[normRef+2]});
+		else if(std::regex_search(line, match, faceLn))
+		{
+			//extract each corner's values
+			for(int i=0; i<3; ++i)
+			{
+				int off=i*3;
+				int cVtx{stoi(match[off+1].str())-1}, cTX{stoi(match[off+2].str())-1}, cNorm{stoi(match[off+3].str())-1};
+				m.vertices.push_back(vertices[cVtx]);
+				m.texCoords.push_back(texCoords[cTX]);
+				m.normals.push_back(normals[cNorm]);
 			}
 		}
+		else
+			continue;
 	}
 
 	//configure sizes
@@ -78,6 +81,5 @@ Model ModelImporter::parseOBJ(const char* filePath) {
 	//fill the tangents array with garbage date, because we don't have tangents in the model
 	m.tangents.resize(m.numVertices, glm::vec3{0,0,0});
 
-	//return result
 	return m;
 }

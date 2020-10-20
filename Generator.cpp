@@ -5,7 +5,8 @@
 using namespace std;
 
 
-Model Generator::generateSphere(int prec) {
+Model Generator::generateSphere(int prec)
+{
 	Model m;
 	m.numVertices = (prec + 1) * (prec + 1);
 	m.numIndices = prec * prec * 6;

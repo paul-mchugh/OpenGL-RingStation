@@ -395,7 +395,7 @@ void handleUserLight(double tdiff)
 	{
 		userlight.direction=-c.getDir();
 		iLight->attachLight(userlight);
-		iLight->overrideAbsPos(c.getPos()+glm::normalize(userlight.direction));
+		iLight->overrideAbsPos(c.getPos()+glm::normalize(userlight.direction)*glm::vec3{15});
 	}
 }
 
